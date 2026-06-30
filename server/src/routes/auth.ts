@@ -2,6 +2,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/User";
 import jwt from "jsonwebtoken";
+import requireAuth from "../middleware/auth";
 
 const router = express.Router();
 
@@ -103,6 +104,17 @@ router.post("/login", async (req, res) => {
     console.log("Login error:", error);
     res.status(500).json({ message: "Something went wrong on the server" });
   }
+});
+
+
+// GET /api/auth/me  ->  returns the logged-in user's id (protected)
+router.get("/me", requireAuth, async (req, res) => {
+  // requireAuth already ran and attached userId to the request
+  const userId = (req as any).userId;
+  res.status(200).json({
+    message: "You are authenticated",
+    userId: userId,
+  });
 });
 
 export default router;
