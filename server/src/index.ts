@@ -1,34 +1,78 @@
 import express from "express";
 import dotenv from "dotenv";
+import http from "http";
+import { Server } from "socket.io";
 import connectToDatabase from "./config/db";
 import authRoutes from "./routes/auth";
-import mongoose from "mongoose";
-import User from "./models/User";
-
 
 // Load environment variables from .env file
 dotenv.config();
 
-// Create express applicaiton
+// Create the Express application
 const app = express();
-
-// The port is door the our server listens on 
 const port = 5000;
 
 // Let the server understand JSON in the request body
 app.use(express.json());
 
+// Connect to MongoDB
 connectToDatabase();
 
-// A simple test route: when someone visits "/", the server sends back the message
-app.get("/", (req, res) => {
-    res.send("Chat server is running")
-})
+// --- Normal HTTP routes ---
 
-// any url startig with /api/auth will be handled by authRoutes
+app.get("/", (req, res) => {
+  res.send("Chat server is running");
+});
+
 app.use("/api/auth", authRoutes);
 
-// this start listeting to the port and lods message
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-})
+// TEMPORARY test page - proves Socket.io works before the React client exists.
+// We will delete this in the next stage.
+app.get("/test", (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <h2>Weavr socket test</h2>
+        <p id="status">Connecting...</p>
+        <script src="/socket.io/socket.io.js"></script>
+        <script>
+          const socket = io();
+          socket.on("connect", function () {
+            document.getElementById("status").textContent =
+              "Connected! Socket id: " + socket.id;
+          });
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+// --- Socket.io setup ---
+
+// Socket.io needs the raw HTTP server, so we build one from our Express app
+const httpServer = http.createServer(app);
+
+// Attach Socket.io to that server. The "cors" setting will let our
+// React client (which will run on port 5173) connect to us later.
+const io = new Server(httpServer, {
+  cors: {
+    origin: "http://localhost:5173",
+  },
+});
+
+// This block runs every time a client connects in real time
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
+
+  // This runs when that same client disconnects
+  socket.on("disconnect", () => {
+    console.log("A user disconnected:", socket.id);
+  });
+});
+
+// IMPORTANT: we now listen on httpServer (not app), so that both
+// normal routes AND real-time sockets work on the same port.
+httpServer.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`);
+});
