@@ -26,28 +26,6 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 
-// TEMPORARY test page - proves Socket.io works before the React client exists.
-// We will delete this in the next stage.
-app.get("/test", (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-      <body>
-        <h2>Weavr socket test</h2>
-        <p id="status">Connecting...</p>
-        <script src="/socket.io/socket.io.js"></script>
-        <script>
-          const socket = io();
-          socket.on("connect", function () {
-            document.getElementById("status").textContent =
-              "Connected! Socket id: " + socket.id;
-          });
-        </script>
-      </body>
-    </html>
-  `);
-});
-
 // --- Socket.io setup ---
 
 // Socket.io needs the raw HTTP server, so we build one from our Express app
