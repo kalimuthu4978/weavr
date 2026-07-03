@@ -43,7 +43,13 @@ const io = new Server(httpServer, {
 io.on("connection", (socket) => {
   console.log("A user connected:", socket.id);
 
-  // This runs when that same client disconnects
+  // When any client sends a message, pass it along to everyone
+  socket.on("sendMessage", (messageText) => {
+    console.log("Message received:", messageText);
+    // io.emit sends to ALL connected clients (including the sender)
+    io.emit("receiveMessage", messageText);
+  });
+
   socket.on("disconnect", () => {
     console.log("A user disconnected:", socket.id);
   });
