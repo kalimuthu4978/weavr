@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import socket from "./socket";
 
+// The shape of a message coming from the server
+type ChatMessage = {
+  _id: string;
+  text: string;
+  createdAt: string;
+};
+
 function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [message, setMessage] = useState("");             // the text being typed
-  const [messages, setMessages] = useState<string[]>([]); // all messages received so far
+  const [messages, setMessages] = useState<ChatMessage[]>([]);; // all messages received so far
 
   useEffect(() => {
     function onConnect() {
@@ -15,22 +22,25 @@ function App() {
       setIsConnected(false);
     }
 
-    // Runs whenever the server sends a message to us
-    function onReceiveMessage(newMessage: string) {
-      // Add the new message to the end of the existing list.
-      // The "previousMessages" form makes sure we always build on the
-      // latest list, even if several messages arrive close together.
+    // Runs once on connect: fills the screen with saved history
+    function onLoadMessages(pastMessages: ChatMessage[]) {
+      setMessages(pastMessages);
+    }
+
+    // Runs each time a new message arrives (now an object, not a string)
+    function onReceiveMessage(newMessage: ChatMessage) {
       setMessages((previousMessages) => [...previousMessages, newMessage]);
     }
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    socket.on("loadMessages", onLoadMessages);
     socket.on("receiveMessage", onReceiveMessage);
 
-    // Cleanup: remove listeners when the component goes away
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      socket.off("loadMessages", onLoadMessages);
       socket.off("receiveMessage", onReceiveMessage);
     };
   }, []);
@@ -77,12 +87,12 @@ function App() {
               No messages yet. Say hello!
             </p>
           ) : (
-            messages.map((singleMessage, index) => (
+            messages.map((singleMessage) => (
               <div
-                key={index}
+                key={singleMessage._id}
                 className="bg-purple-100 text-purple-900 px-3 py-2 rounded-lg"
               >
-                {singleMessage}
+                {singleMessage.text}
               </div>
             ))
           )}

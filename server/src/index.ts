@@ -4,6 +4,7 @@ import http from "http";
 import { Server } from "socket.io";
 import connectToDatabase from "./config/db";
 import authRoutes from "./routes/auth";
+import Message from "./models/Message";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -39,15 +40,31 @@ const io = new Server(httpServer, {
   },
 });
 
-// This block runs every time a client connects in real time
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   console.log("A user connected:", socket.id);
 
-  // When any client sends a message, pass it along to everyone
-  socket.on("sendMessage", (messageText) => {
-    console.log("Message received:", messageText);
-    // io.emit sends to ALL connected clients (including the sender)
-    io.emit("receiveMessage", messageText);
+  // 1. When a client connects, load past messages and send them just to that client
+  try {
+    // Find all messages, sorted oldest first (createdAt: 1 = ascending)
+    const pastMessages = await Message.find().sort({ createdAt: 1 });
+    // socket.emit (not io.emit) = send only to THIS newly connected client
+    socket.emit("loadMessages", pastMessages);
+  } catch (error) {
+    console.log("Error loading past messages:", error);
+  }
+
+  // 2. When a client sends a message: save it, then broadcast it
+  socket.on("sendMessage", async (messageText) => {
+    try {
+      // Save the message to MongoDB
+      const newMessage = new Message({ text: messageText });
+      await newMessage.save();
+
+      // Broadcast the SAVED message (it now has _id and createdAt) to everyone
+      io.emit("receiveMessage", newMessage);
+    } catch (error) {
+      console.log("Error saving message:", error);
+    }
   });
 
   socket.on("disconnect", () => {
