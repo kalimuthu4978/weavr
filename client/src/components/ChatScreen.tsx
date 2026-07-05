@@ -171,7 +171,7 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
     }
 
     return (
-        <div className="min-h-screen flex flex-col bg-gradient-to-br from-purple-600 to-blue-500 text-white">
+        <div className="h-screen flex flex-col bg-gradient-to-br from-purple-600 to-blue-500 text-white overflow-hidden">
 
             {/* Top bar */}
             <div className="flex items-center justify-between px-6 py-4">
@@ -194,7 +194,7 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
             </div>
 
             {/* Main area: contacts on the left, chat on the right */}
-            <div className="flex-1 flex gap-4 px-6 pb-6 overflow-hidden">
+            <div className="flex-1 flex gap-4 px-6 pb-6 overflow-hidden min-h-0">
 
                 {/* Contacts list */}
                 <div className="bg-white text-gray-800 rounded-xl w-64 flex flex-col shadow-lg overflow-hidden">
