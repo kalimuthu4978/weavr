@@ -145,6 +145,13 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
         setSelectedContact(contact);
         setMessages([]); // clear the old conversation while the new one loads
         socket.emit("getConversation", contact._id);
+
+        // Clear the unread badge for this contact - we're reading them now
+        setUnreadIds((previous) => {
+            const updated = { ...previous };
+            updated[contact._id] = []; // empty list = no unread = no badge
+            return updated;
+        });
     }
 
     // --- Send a message to the selected contact ---
