@@ -68,25 +68,55 @@ io.on("connection", async (socket) => {
   }
 
   // 2. When a client sends a message: save it, then broadcast it
-  socket.on("sendMessage", async (messageText) => {
+  // Send a message to ONE specific user
+  socket.on("sendMessage", async (data) => {
     try {
-      // Save the message to MongoDB
-      const newMessage = new Message({ text: messageText });
+      const text = data.text;
+      const receiverId = data.receiverId;
+
+      // We need to know who is sending: it's the userId from this connection
+      if (!userId) {
+        console.log("Cannot send: this socket has no userId");
+        return;
+      }
+
+      // Save the message with sender + receiver
+      const newMessage = new Message({
+        text: text,
+        sender: userId,
+        receiver: receiverId,
+      });
       await newMessage.save();
 
-      // Broadcast the SAVED message (it now has _id and createdAt) to everyone
-      io.emit("receiveMessage", newMessage);
+      // Deliver to the receiver's room AND the sender's room.
+      // io.to(room).emit sends only to sockets in that room.
+      // Deliver to both people in ONE emit. If sender === receiver,
+      // Socket.io automatically de-duplicates, so no double-send.
+      io.to([receiverId, userId]).emit("receiveMessage", newMessage);
     } catch (error) {
       console.log("Error saving message:", error);
     }
   });
   // A client can ask for the message history at any time
-  socket.on("getMessages", async () => {
+  // Load the conversation between me and one other user
+  socket.on("getConversation", async (otherUserId) => {
     try {
-      const pastMessages = await Message.find().sort({ createdAt: 1 });
-      socket.emit("loadMessages", pastMessages);
+      if (!userId) {
+        return;
+      }
+
+      // Find messages where (I sent to them) OR (they sent to me).
+      // $or matches either condition.
+      const conversation = await Message.find({
+        $or: [
+          { sender: userId, receiver: otherUserId },
+          { sender: otherUserId, receiver: userId },
+        ],
+      }).sort({ createdAt: 1 });
+
+      socket.emit("loadMessages", conversation);
     } catch (error) {
-      console.log("Error loading messages:", error);
+      console.log("Error loading conversation:", error);
     }
   });
 
