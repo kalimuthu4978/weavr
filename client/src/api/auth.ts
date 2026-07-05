@@ -31,3 +31,25 @@ export async function registerUser(
 
   return data;
 }
+
+// Sends login details; returns { message, token, user } on success
+export async function loginUser(email: string, password: string) {
+  const response = await fetch(`${API_URL}/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email: email,
+      password: password,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Login failed");
+  }
+
+  return data;
+}

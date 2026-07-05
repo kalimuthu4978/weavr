@@ -1,4 +1,4 @@
-import SignupForm from "./components/SignupForm";
+import LoginForm from "./components/LoginForm";
 
 function App() {
   return (
@@ -8,7 +8,7 @@ function App() {
         <span className="text-3xl font-bold text-white">Weavr</span>
       </div>
 
-      <SignupForm />
+      <LoginForm />
     </div>
   );
 }
