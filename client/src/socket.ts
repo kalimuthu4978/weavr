@@ -8,6 +8,7 @@ const storedUser = getStoredUser();
 
 // Pass the user id along with the connection using "auth"
 const socket = io(SERVER_URL, {
+  autoConnect: false,   // we connect manually after login instead
   auth: {
     userId: storedUser ? storedUser.id : null,
   },

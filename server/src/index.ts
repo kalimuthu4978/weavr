@@ -5,8 +5,10 @@ import { Server } from "socket.io";
 import connectToDatabase from "./config/db";
 import authRoutes from "./routes/auth";
 import Message from "./models/Message";
+import User from "./models/User";
 import cors from "cors";
 import userRoutes from "./routes/users";
+
 
 // Load environment variables from .env file
 dotenv.config();
@@ -46,14 +48,20 @@ const io = new Server(httpServer, {
 });
 
 io.on("connection", async (socket) => {
-  // Read the userId the client sent when connecting
   const userId = socket.handshake.auth.userId;
   console.log("A user connected:", socket.id, "userId:", userId);
 
-  // Put this connection into a room named after the user's own id.
-  // Later, sending to this room reaches exactly this user.
   if (userId) {
     socket.join(userId);
+
+    // Mark this user online in the database, then tell everyone
+    try {
+      await User.findByIdAndUpdate(userId, { status: "online" });
+      // Broadcast to ALL clients: this user is now online
+      io.emit("userStatusChanged", { userId: userId, status: "online" });
+    } catch (error) {
+      console.log("Error setting user online:", error);
+    }
   }
 
   // ... your existing getMessages listener, sendMessage, disconnect, etc. stay below
@@ -120,10 +128,19 @@ io.on("connection", async (socket) => {
     }
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     console.log("A user disconnected:", socket.id);
+
+    if (userId) {
+      try {
+        await User.findByIdAndUpdate(userId, { status: "offline" });
+        io.emit("userStatusChanged", { userId: userId, status: "offline" });
+      } catch (error) {
+        console.log("Error setting user offline:", error);
+      }
+    }
   });
-});
+}); // <-- ADD THIS LINE: closes the io.on("connection", ...) block
 
 // IMPORTANT: we now listen on httpServer (not app), so that both
 // normal routes AND real-time sockets work on the same port.
