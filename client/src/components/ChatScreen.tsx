@@ -24,7 +24,8 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
     // Live status per user id, e.g. { "6a49f9...": "online" }
     const [statusMap, setStatusMap] = useState<Record<string, string>>({});
     // How many unread messages per user id, e.g. { "6a49f9...": 3 }
-    const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+    // Unread message IDs per user id, e.g. { "6a49f9...": ["msgId1", "msgId2"] }
+    const [unreadIds, setUnreadIds] = useState<Record<string, string[]>>({});
 
     // The list of people I can chat with
     const [contacts, setContacts] = useState<ContactUser[]>([]);
@@ -97,13 +98,19 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
                         return [...previous, newMessage];
                     });
                 } else {
-                    // Message is for a chat I'm NOT viewing -> count it as unread.
-                    // But don't badge my own sent messages (they echo back to me).
+                    // Message is for a chat I'm NOT viewing -> record it as unread,
+                    // but only if we haven't already counted this exact message id.
                     if (newMessage.sender !== currentUser.id) {
-                        setUnreadCounts((previous) => {
+                        setUnreadIds((previous) => {
+                            const existingIds = previous[otherPersonId] || [];
+
+                            // If this message id is already recorded, do nothing (no double count)
+                            if (existingIds.includes(newMessage._id)) {
+                                return previous;
+                            }
+
                             const updated = { ...previous };
-                            const currentCount = updated[otherPersonId] || 0;
-                            updated[otherPersonId] = currentCount + 1;
+                            updated[otherPersonId] = [...existingIds, newMessage._id];
                             return updated;
                         });
                     }
@@ -219,10 +226,10 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
                                         {/* Username takes the available space */}
                                         <span className="flex-1">{contact.username}</span>
 
-                                        {/* Unread badge - only shows if there's at least one unread */}
-                                        {unreadCounts[contact._id] > 0 && (
+                                        {/* Unread badge - shows the number of unread message ids */}
+                                        {unreadIds[contact._id] && unreadIds[contact._id].length > 0 && (
                                             <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
-                                                {unreadCounts[contact._id]}
+                                                {unreadIds[contact._id].length}
                                             </span>
                                         )}
                                     </button>
