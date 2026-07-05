@@ -1,17 +1,26 @@
 import mongoose from "mongoose";
 
-// Describes what one chat message looks like in the database
 const messageSchema = new mongoose.Schema(
   {
     text: {
       type: String,
       required: true,
     },
-    // We'll expand this later (who sent it, which chat it belongs to).
-    // For now we just store the text and rely on timestamps for ordering.
+    // The _id of the User who sent this message
+    sender: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    // The _id of the User this message is for
+    receiver: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
   },
   {
-    timestamps: true, // auto-adds createdAt (used to sort oldest -> newest)
+    timestamps: true,
   }
 );
 

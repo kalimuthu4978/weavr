@@ -6,6 +6,7 @@ import connectToDatabase from "./config/db";
 import authRoutes from "./routes/auth";
 import Message from "./models/Message";
 import cors from "cors";
+import userRoutes from "./routes/users";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -30,7 +31,7 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-
+app.use("/api/users", userRoutes);
 // --- Socket.io setup ---
 
 // Socket.io needs the raw HTTP server, so we build one from our Express app
