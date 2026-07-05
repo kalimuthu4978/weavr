@@ -46,8 +46,17 @@ const io = new Server(httpServer, {
 });
 
 io.on("connection", async (socket) => {
-  console.log("A user connected:", socket.id);
+  // Read the userId the client sent when connecting
+  const userId = socket.handshake.auth.userId;
+  console.log("A user connected:", socket.id, "userId:", userId);
 
+  // Put this connection into a room named after the user's own id.
+  // Later, sending to this room reaches exactly this user.
+  if (userId) {
+    socket.join(userId);
+  }
+
+  // ... your existing getMessages listener, sendMessage, disconnect, etc. stay below
   // 1. When a client connects, load past messages and send them just to that client
   try {
     // Find all messages, sorted oldest first (createdAt: 1 = ascending)

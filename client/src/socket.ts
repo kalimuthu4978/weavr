@@ -1,9 +1,16 @@
 import { io } from "socket.io-client";
+import { getStoredUser } from "./auth/session";
 
-// The address of our backend server (where Socket.io is running)
 const SERVER_URL = "http://localhost:5000";
 
-// Create ONE socket connection that the whole app will share
-const socket = io(SERVER_URL);
+// Read the logged-in user (if any) so we can tell the server who we are
+const storedUser = getStoredUser();
+
+// Pass the user id along with the connection using "auth"
+const socket = io(SERVER_URL, {
+  auth: {
+    userId: storedUser ? storedUser.id : null,
+  },
+});
 
 export default socket;
