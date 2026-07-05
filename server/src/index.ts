@@ -5,6 +5,7 @@ import { Server } from "socket.io";
 import connectToDatabase from "./config/db";
 import authRoutes from "./routes/auth";
 import Message from "./models/Message";
+import cors from "cors";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -15,6 +16,9 @@ const port = 5000;
 
 // Let the server understand JSON in the request body
 app.use(express.json());
+
+// Allow our React app (port 5173) to make HTTP requests to this server
+app.use(cors({ origin: "http://localhost:5173" }));
 
 // Connect to MongoDB
 connectToDatabase();

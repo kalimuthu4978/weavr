@@ -1,0 +1,33 @@
+// The base address of our backend's auth routes
+const API_URL = "http://localhost:5000/api/auth";
+
+// Sends signup details to the backend to create a new account
+export async function registerUser(
+  username: string,
+  email: string,
+  password: string
+) {
+  // fetch makes an HTTP request to the server
+  const response = await fetch(`${API_URL}/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json", // tells the server we're sending JSON
+    },
+    body: JSON.stringify({
+      username: username,
+      email: email,
+      password: password,
+    }),
+  });
+
+  // Convert the server's JSON reply into a JavaScript object
+  const data = await response.json();
+
+  // response.ok is false for error statuses (like 400).
+  // If so, throw the server's message so the form can display it.
+  if (!response.ok) {
+    throw new Error(data.message || "Registration failed");
+  }
+
+  return data;
+}
