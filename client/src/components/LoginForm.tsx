@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { loginUser } from "../api/auth";
 import { saveSession } from "../auth/session";
+import type { StoredUser } from "../auth/session";
 
-function LoginForm() {
+// The parent (App) passes down a function to call when login succeeds
+type LoginFormProps = {
+  onLoginSuccess: (user: StoredUser) => void;
+};
+
+function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -17,11 +23,10 @@ function LoginForm() {
 
     try {
       const data = await loginUser(email, password);
-
-      // data has: message, token, user  -> save token + user to localStorage
       saveSession(data.token, data.user);
 
-      setFeedback("Logged in successfully! Welcome " + data.user.username);
+      // Tell App we're logged in - App will switch to the chat screen
+      onLoginSuccess(data.user);
     } catch (error) {
       if (error instanceof Error) {
         setFeedback(error.message);

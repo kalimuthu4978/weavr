@@ -70,6 +70,15 @@ io.on("connection", async (socket) => {
       console.log("Error saving message:", error);
     }
   });
+  // A client can ask for the message history at any time
+  socket.on("getMessages", async () => {
+    try {
+      const pastMessages = await Message.find().sort({ createdAt: 1 });
+      socket.emit("loadMessages", pastMessages);
+    } catch (error) {
+      console.log("Error loading messages:", error);
+    }
+  });
 
   socket.on("disconnect", () => {
     console.log("A user disconnected:", socket.id);
