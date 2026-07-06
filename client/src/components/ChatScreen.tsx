@@ -4,6 +4,8 @@ import type { StoredUser } from "../auth/session";
 import { fetchUsers } from "../api/users";
 import type { ContactUser } from "../api/users";
 import ProfilePanel from "./ProfilePanel";
+import { searchMessages } from "../api/messages";
+import type { SearchResultMessage } from "../api/messages";
 
 type ChatMessage = {
     _id: string;
@@ -25,6 +27,11 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     const [message, setMessage] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
+    // Global search (across all conversations)
+    const [globalSearchTerm, setGlobalSearchTerm] = useState("");
+    const [searchResults, setSearchResults] = useState<SearchResultMessage[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
     // Live status per user id, e.g. { "6a49f9...": "online" }
     const [statusMap, setStatusMap] = useState<Record<string, string>>({});
     // How many unread messages per user id, e.g. { "6a49f9...": 3 }
@@ -173,6 +180,45 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
         });
         setMessage("");
     }
+    async function handleGlobalSearch() {
+        const term = globalSearchTerm.trim();
+
+        if (term === "") {
+            setSearchResults([]);
+            setHasSearched(false);   // <-- empty search exits search mode
+            return;
+        }
+
+        setHasSearched(true);      // <-- we've now run a search
+        setIsSearching(true);
+        try {
+            const results = await searchMessages(term);
+            setSearchResults(results);
+        } catch (error) {
+            console.log("Search error:", error);
+            setSearchResults([]);
+        }
+        setIsSearching(false);
+    }
+
+    function handleOpenSearchResult(result: SearchResultMessage) {
+        // Whoever isn't me is the conversation partner
+        const otherPersonId =
+            result.sender === currentUser.id ? result.receiver : result.sender;
+
+        // Find that contact in our contacts list
+        const matchingContact = contacts.find(
+            (oneContact) => oneContact._id === otherPersonId
+        );
+
+        if (matchingContact) {
+            handleSelectContact(matchingContact); // opens that conversation
+            // Clear the search after jumping in
+            setGlobalSearchTerm("");
+            setSearchResults([]);
+            setHasSearched(false);
+        }
+    }
     // Make a sorted copy of contacts: those with unread messages come first.
     // We copy the array first (with the spread) so we never mutate state directly.
     const sortedContacts = [...contacts].sort((firstContact, secondContact) => {
@@ -237,62 +283,132 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             <div className="flex-1 flex gap-4 px-6 pb-6 overflow-hidden min-h-0">
 
                 {/* Contacts list */}
-                <div className="bg-white text-gray-800 rounded-xl w-64 flex flex-col shadow-lg overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-200 font-semibold text-purple-700">
-                        Contacts
-                    </div>
-                    <div className="flex-1 overflow-y-auto">
-                        {contacts.length === 0 ? (
-                            <p className="text-gray-400 text-sm text-center mt-4 px-2">
-                                No other users yet. Sign up a second account to chat.
-                            </p>
-                        ) : (
-                            sortedContacts.map((contact) => {
-                                const isSelected =
-                                    selectedContact !== null &&
-                                    selectedContact._id === contact._id;
-                                return (
-                                    <button
-                                        key={contact._id}
-                                        onClick={() => handleSelectContact(contact)}
-                                        className={
-                                            "w-full text-left px-4 py-3 hover:bg-purple-50 transition flex items-center gap-2 " +
-                                            (isSelected ? "bg-purple-100 font-semibold" : "")
-                                        }
-                                    >
-                                        {/* Online/offline dot */}
-                                        <span
-                                            className={
-                                                "w-2.5 h-2.5 rounded-full " +
-                                                (statusMap[contact._id] === "online"
-                                                    ? "bg-green-500"
-                                                    : "bg-gray-300")
-                                            }
-                                        ></span>
+                {/* Contacts panel (also holds search + results) */}
+                <div className="bg-white text-gray-800 rounded-xl w-72 flex flex-col shadow-lg overflow-hidden">
 
-                                        {/* Username takes the available space */}
-                                        <span
-                                            className={
-                                                "flex-1 " +
-                                                (unreadIds[contact._id] && unreadIds[contact._id].length > 0
-                                                    ? "font-bold"
-                                                    : "")
-                                            }
+                    {/* Search box - pinned at the very top of the panel */}
+                    <div className="px-3 py-3 border-b border-gray-200">
+                        <input
+                            type="text"
+                            value={globalSearchTerm}
+                            onChange={(e) => setGlobalSearchTerm(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    handleGlobalSearch();
+                                }
+                            }}
+                            placeholder="Search all chats..."
+                            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                        />
+                    </div>
+
+                    {hasSearched ? (
+                        // --- SEARCH MODE: results replace the contact list ---
+                        <div className="flex-1 overflow-y-auto">
+                            <div className="px-4 py-2 flex items-center justify-between">
+                                <span className="text-xs font-semibold text-gray-500">
+                                    {searchResults.length} result(s)
+                                </span>
+                                <button
+                                    onClick={() => {
+                                        setGlobalSearchTerm("");
+                                        setSearchResults([]);
+                                        setHasSearched(false);
+                                    }}
+                                    className="text-xs text-purple-600 hover:underline"
+                                >
+                                    Back to contacts
+                                </button>
+                            </div>
+
+                            {searchResults.length === 0 ? (
+                                <p className="text-gray-400 text-sm text-center mt-4 px-2">
+                                    Press Enter to search. No results to show yet.
+                                </p>
+                            ) : (
+                                searchResults.map((result) => {
+                                    // Work out who the conversation is with, for a small label
+                                    const otherPersonId =
+                                        result.sender === currentUser.id
+                                            ? result.receiver
+                                            : result.sender;
+                                    const otherContact = contacts.find(
+                                        (c) => c._id === otherPersonId
+                                    );
+                                    return (
+                                        <button
+                                            key={result._id}
+                                            onClick={() => handleOpenSearchResult(result)}
+                                            className="w-full text-left px-4 py-2 hover:bg-purple-50 transition"
                                         >
-                                            {contact.username}
-                                        </span>
-
-                                        {/* Unread badge - shows the number of unread message ids */}
-                                        {unreadIds[contact._id] && unreadIds[contact._id].length > 0 && (
-                                            <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
-                                                {unreadIds[contact._id].length}
-                                            </span>
-                                        )}
-                                    </button>
-                                );
-                            })
-                        )}
-                    </div>
+                                            <div className="text-xs text-purple-600 font-semibold">
+                                                {otherContact ? otherContact.username : "Unknown"}
+                                            </div>
+                                            <div className="text-sm text-gray-800 truncate">
+                                                {result.text}
+                                            </div>
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
+                    ) : (
+                        // --- NORMAL MODE: the contact list ---
+                        <>
+                            <div className="px-4 py-3 border-b border-gray-200 font-semibold text-purple-700">
+                                Contacts
+                            </div>
+                            <div className="flex-1 overflow-y-auto">
+                                {contacts.length === 0 ? (
+                                    <p className="text-gray-400 text-sm text-center mt-4 px-2">
+                                        No other users yet. Sign up a second account to chat.
+                                    </p>
+                                ) : (
+                                    sortedContacts.map((contact) => {
+                                        const isSelected =
+                                            selectedContact !== null &&
+                                            selectedContact._id === contact._id;
+                                        return (
+                                            <button
+                                                key={contact._id}
+                                                onClick={() => handleSelectContact(contact)}
+                                                className={
+                                                    "w-full text-left px-4 py-3 hover:bg-purple-50 transition flex items-center gap-2 " +
+                                                    (isSelected ? "bg-purple-100 font-semibold" : "")
+                                                }
+                                            >
+                                                <span
+                                                    className={
+                                                        "w-2.5 h-2.5 rounded-full " +
+                                                        (statusMap[contact._id] === "online"
+                                                            ? "bg-green-500"
+                                                            : "bg-gray-300")
+                                                    }
+                                                ></span>
+                                                <span
+                                                    className={
+                                                        "flex-1 " +
+                                                        (unreadIds[contact._id] &&
+                                                            unreadIds[contact._id].length > 0
+                                                            ? "font-bold"
+                                                            : "")
+                                                    }
+                                                >
+                                                    {contact.username}
+                                                </span>
+                                                {unreadIds[contact._id] &&
+                                                    unreadIds[contact._id].length > 0 && (
+                                                        <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                                                            {unreadIds[contact._id].length}
+                                                        </span>
+                                                    )}
+                                            </button>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Conversation panel */}
