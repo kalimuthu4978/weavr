@@ -44,6 +44,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     const [hasSearched, setHasSearched] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
     const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
+    const [groupMessageText, setGroupMessageText] = useState("");
     // Live status per user id, e.g. { "6a49f9...": "online" }
     const [statusMap, setStatusMap] = useState<Record<string, string>>({});
     // How many unread messages per user id, e.g. { "6a49f9...": 3 }
@@ -110,6 +111,27 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                 return updated;
             });
         }
+        function onReceiveGroupMessage(newGroupMessage: GroupMessage) {
+            // Only show it if it belongs to the group I'm currently viewing.
+            setSelectedGroup((currentlyOpenGroup) => {
+                if (
+                    currentlyOpenGroup !== null &&
+                    currentlyOpenGroup._id === newGroupMessage.group
+                ) {
+                    setGroupMessages((previous) => {
+                        // Dedupe by _id (same idempotency guard as 1-on-1 messages)
+                        const alreadyExists = previous.some(
+                            (existing) => existing._id === newGroupMessage._id
+                        );
+                        if (alreadyExists) {
+                            return previous;
+                        }
+                        return [...previous, newGroupMessage];
+                    });
+                }
+                return currentlyOpenGroup;
+            });
+        }
         function onReceiveMessage(newMessage: ChatMessage) {
             setSelectedContact((currentlySelected) => {
                 // Figure out who the "other person" in this message is.
@@ -161,12 +183,14 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
         // so we never stack duplicates.
         socket.off("receiveMessage");
         socket.off("loadMessages");
+        socket.off("receiveGroupMessage");
 
         socket.on("connect", onConnect);
         socket.on("disconnect", onDisconnect);
         socket.on("loadMessages", onLoadMessages);
         socket.on("receiveMessage", onReceiveMessage);
         socket.on("userStatusChanged", onUserStatusChanged);
+        socket.on("receiveGroupMessage", onReceiveGroupMessage);
 
         return () => {
             socket.off("connect", onConnect);
@@ -174,6 +198,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             socket.off("loadMessages", onLoadMessages);
             socket.off("receiveMessage", onReceiveMessage);
             socket.off("userStatusChanged", onUserStatusChanged);
+            socket.off("receiveGroupMessage", onReceiveGroupMessage);
         };
     }, []);
 
@@ -222,6 +247,21 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             receiverId: selectedContact._id,
         });
         setMessage("");
+    }
+    // --- Send a message to the currently open group ---
+    function handleSendGroupMessage() {
+        if (groupMessageText.trim() === "") {
+            return;
+        }
+        if (selectedGroup === null) {
+            return; // no group open, nothing to do
+        }
+
+        socket.emit("sendGroupMessage", {
+            text: groupMessageText,
+            groupId: selectedGroup._id,
+        });
+        setGroupMessageText("");
     }
     async function handleGlobalSearch() {
         const term = globalSearchTerm.trim();
@@ -528,14 +568,26 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                 )}
                             </div>
 
-                            {/* Group input - not wired to send yet (that's group-iv-c) */}
+                            {/* Group input */}
                             <div className="border-t border-gray-200 p-3 flex gap-2">
                                 <input
                                     type="text"
-                                    placeholder="Group messaging coming in the next step..."
-                                    disabled
-                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-gray-400"
+                                    value={groupMessageText}
+                                    onChange={(e) => setGroupMessageText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            handleSendGroupMessage();
+                                        }
+                                    }}
+                                    placeholder={"Message " + selectedGroup.name + "..."}
+                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
                                 />
+                                <button
+                                    onClick={handleSendGroupMessage}
+                                    className="bg-purple-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-purple-700 transition"
+                                >
+                                    Send
+                                </button>
                             </div>
                         </>
                     ) : (
