@@ -6,6 +6,8 @@ import type { ContactUser } from "../api/users";
 import ProfilePanel from "./ProfilePanel";
 import { searchMessages } from "../api/messages";
 import type { SearchResultMessage } from "../api/messages";
+import { fetchGroups } from "../api/groups";
+import type { Group } from "../api/groups";
 
 type ChatMessage = {
     _id: string;
@@ -27,6 +29,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     const [message, setMessage] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
+    const [groups, setGroups] = useState<Group[]>([]);
     // Global search (across all conversations)
     const [globalSearchTerm, setGlobalSearchTerm] = useState("");
     const [searchResults, setSearchResults] = useState<SearchResultMessage[]>([]);
@@ -46,6 +49,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     );
 
     // --- Load the contact list once when the chat opens ---
+// --- Load the contact list and groups once when the chat opens ---
     useEffect(() => {
         async function loadContacts() {
             try {
@@ -62,7 +66,18 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                 console.log("Could not load contacts:", error);
             }
         }
+
+        async function loadGroups() {
+            try {
+                const myGroups = await fetchGroups();
+                setGroups(myGroups);
+            } catch (error) {
+                console.log("Could not load groups:", error);
+            }
+        }
+
         loadContacts();
+        loadGroups();
     }, []);
 
     // --- Socket listeners (connection + incoming messages) ---
@@ -355,6 +370,34 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                     ) : (
                         // --- NORMAL MODE: the contact list ---
                         <>
+                            {/* Groups section */}
+                            <div className="px-4 py-3 border-b border-gray-200 font-semibold text-purple-700">
+                                Groups
+                            </div>
+                            <div className="border-b border-gray-200">
+                                {groups.length === 0 ? (
+                                    <p className="text-gray-400 text-sm px-4 py-2">
+                                        No groups yet.
+                                    </p>
+                                ) : (
+                                    groups.map((oneGroup) => (
+                                        <button
+                                            key={oneGroup._id}
+                                            className="w-full text-left px-4 py-3 hover:bg-purple-50 transition flex items-center gap-2"
+                                        >
+                                            {/* A simple group icon using initials */}
+                                            <span className="w-6 h-6 rounded-full bg-purple-200 text-purple-700 text-xs font-bold flex items-center justify-center">
+                                                {oneGroup.name
+                                                    ? oneGroup.name.charAt(0).toUpperCase()
+                                                    : "?"}
+                                            </span>
+                                            <span className="flex-1">
+                                                {oneGroup.name || "Unnamed group"}
+                                            </span>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
                             <div className="px-4 py-3 border-b border-gray-200 font-semibold text-purple-700">
                                 Contacts
                             </div>
