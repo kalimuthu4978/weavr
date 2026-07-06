@@ -3,6 +3,7 @@ import socket from "../socket";
 import type { StoredUser } from "../auth/session";
 import { fetchUsers } from "../api/users";
 import type { ContactUser } from "../api/users";
+import ProfilePanel from "./ProfilePanel";
 
 type ChatMessage = {
     _id: string;
@@ -15,9 +16,11 @@ type ChatMessage = {
 type ChatScreenProps = {
     currentUser: StoredUser;
     onLogout: () => void;
+    onProfileUpdated: (updatedUser: StoredUser) => void;
 };
 
-function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
+function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps) {
+    const [showProfile, setShowProfile] = useState(false);
     const [isConnected, setIsConnected] = useState(socket.connected);
     const [message, setMessage] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -184,7 +187,16 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
     });
     return (
         <div className="h-screen flex flex-col bg-gradient-to-br from-purple-600 to-blue-500 text-white overflow-hidden">
-
+            {showProfile && (
+                <ProfilePanel
+                    currentUser={currentUser}
+                    onClose={() => setShowProfile(false)}
+                    onProfileUpdated={(updatedUser) => {
+                        onProfileUpdated(updatedUser);
+                        setShowProfile(false);
+                    }}
+                />
+            )}
             {/* Top bar */}
             <div className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
@@ -196,6 +208,12 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
                         {isConnected ? "● Connected" : "● Offline"}
                     </span>
                     <span className="text-sm">Hi, {currentUser.username}</span>
+                    <button
+                        onClick={() => setShowProfile(true)}
+                        className="bg-white/20 hover:bg-white/30 text-sm font-semibold px-3 py-1 rounded-lg transition"
+                    >
+                        Profile
+                    </button>
                     <button
                         onClick={onLogout}
                         className="bg-white/20 hover:bg-white/30 text-sm font-semibold px-3 py-1 rounded-lg transition"

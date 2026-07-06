@@ -9,6 +9,7 @@ export type StoredUser = {
   id: string;
   username: string;
   email: string;
+  statusMessage?: string;   // optional - older sessions may not have it
 };
 
 // Save token + user after a successful login
@@ -37,4 +38,9 @@ export function getStoredUser(): StoredUser | null {
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+}
+
+// Update just the stored user info (keeps the existing token)
+export function updateStoredUser(user: StoredUser) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
 }

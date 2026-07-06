@@ -21,7 +21,7 @@ function App() {
   }, []);
 
   // Called by the login form after a successful login
-function handleAuthSuccess(user: StoredUser) {
+  function handleAuthSuccess(user: StoredUser) {
     setCurrentUser(user);
 
     // Update the socket's auth with THIS user's id, then connect.
@@ -29,6 +29,10 @@ function handleAuthSuccess(user: StoredUser) {
     // would still be using the previous user's id.
     socket.auth = { userId: user.id };
     socket.connect();
+  }
+
+  function handleProfileUpdated(updatedUser: StoredUser) {
+    setCurrentUser(updatedUser);
   }
 
   function handleLogout() {
@@ -44,7 +48,14 @@ function handleAuthSuccess(user: StoredUser) {
     return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
   }
 
-  return <ChatScreen currentUser={currentUser} onLogout={handleLogout} />;
+  return (
+    <ChatScreen
+      currentUser={currentUser}
+      onLogout={handleLogout}
+      onProfileUpdated={handleProfileUpdated}
+    />
+  );
 }
+
 
 export default App;

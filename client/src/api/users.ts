@@ -31,3 +31,33 @@ export async function fetchUsers(): Promise<ContactUser[]> {
 
   return data;
 }
+
+// (fetchUsers stays above)
+
+// Update the logged-in user's own profile (username and/or status message)
+export async function updateProfile(
+  username: string,
+  statusMessage: string
+) {
+  const token = getToken();
+
+  const response = await fetch("http://localhost:5000/api/users/profile", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      username: username,
+      statusMessage: statusMessage,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to update profile");
+  }
+
+  return data; // { message, user }
+}
