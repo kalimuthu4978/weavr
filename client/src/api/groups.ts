@@ -61,3 +61,32 @@ export async function fetchGroupMessages(
 
   return data;
 }
+
+
+// Create a new group with a name and a list of member ids
+export async function createGroup(
+  name: string,
+  memberIds: string[]
+): Promise<Group> {
+  const token = getToken();
+
+  const response = await fetch("http://localhost:5000/api/groups", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      name: name,
+      memberIds: memberIds,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to create group");
+  }
+
+  return data.group;
+}

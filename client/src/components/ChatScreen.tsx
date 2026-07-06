@@ -8,6 +8,7 @@ import { searchMessages } from "../api/messages";
 import type { SearchResultMessage } from "../api/messages";
 import { fetchGroups, fetchGroupMessages } from "../api/groups";
 import type { Group } from "../api/groups";
+import CreateGroupPanel from "./CreateGroupPanel";
 
 
 type ChatMessage = {
@@ -47,6 +48,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     const [groupMessageText, setGroupMessageText] = useState("");
     // Live status per user id, e.g. { "6a49f9...": "online" }
     const [statusMap, setStatusMap] = useState<Record<string, string>>({});
+    const [showCreateGroup, setShowCreateGroup] = useState(false);
     // How many unread messages per user id, e.g. { "6a49f9...": 3 }
     // Unread message IDs per user id, e.g. { "6a49f9...": ["msgId1", "msgId2"] }
     const [unreadIds, setUnreadIds] = useState<Record<string, string[]>>({});
@@ -336,6 +338,23 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                     }}
                 />
             )}
+            {showCreateGroup && (
+                <CreateGroupPanel
+                    contacts={contacts}
+                    onClose={() => setShowCreateGroup(false)}
+                    onGroupCreated={(newGroup) => {
+                        // Add the new group to the list right away
+                        setGroups((previous) => [newGroup, ...previous]);
+                        setShowCreateGroup(false);
+
+                        // Reconnect the socket so it joins the new group's room.
+                        // (Rooms are joined on connect; a brand-new group needs a
+                        // fresh connect for live messages to reach us.)
+                        socket.disconnect();
+                        socket.connect();
+                    }}
+                />
+            )}
             {/* Top bar */}
             <div className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
@@ -439,8 +458,14 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                         // --- NORMAL MODE: the contact list ---
                         <>
                             {/* Groups section */}
-                            <div className="px-4 py-3 border-b border-gray-200 font-semibold text-purple-700">
-                                Groups
+                            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                                <span className="font-semibold text-purple-700">Groups</span>
+                                <button
+                                    onClick={() => setShowCreateGroup(true)}
+                                    className="text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-1 rounded-lg hover:bg-purple-200 transition"
+                                >
+                                    + New
+                                </button>
                             </div>
                             <div className="border-b border-gray-200">
                                 {groups.length === 0 ? (
