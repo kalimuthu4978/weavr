@@ -1,6 +1,7 @@
 import express from "express";
 import Group from "../models/Group";
 import requireAuth from "../middleware/auth";
+import GroupMessage from "../models/GroupMessage";
 
 const router = express.Router();
 
@@ -62,6 +63,40 @@ router.get("/", requireAuth, async (req, res) => {
     res.status(200).json(groups);
   } catch (error) {
     console.log("Error fetching groups:", error);
+    res.status(500).json({ message: "Something went wrong on the server" });
+  }
+});
+
+// GET /api/groups/:groupId/messages  ->  load one group's message history
+router.get("/:groupId/messages", requireAuth, async (req, res) => {
+  try {
+    const currentUserId = (req as any).userId;
+    const groupId = req.params.groupId;
+
+    // Safety: make sure this group exists AND the user is a member of it,
+    // so people can't read messages from groups they're not in.
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    const isMember = group.members.some(
+      (memberId) => memberId.toString() === currentUserId
+    );
+    if (!isMember) {
+      return res
+        .status(403)
+        .json({ message: "You are not a member of this group" });
+    }
+
+    // Load this group's messages, oldest first
+    const messages = await GroupMessage.find({ group: groupId }).sort({
+      createdAt: 1,
+    });
+
+    res.status(200).json(messages);
+  } catch (error) {
+    console.log("Error loading group messages:", error);
     res.status(500).json({ message: "Something went wrong on the server" });
   }
 });
