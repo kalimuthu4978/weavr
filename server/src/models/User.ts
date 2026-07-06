@@ -1,40 +1,47 @@
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
-    {
-        username:{
-            type: String,
-            required: true,
-            unique: true,
-            trim: true,
-        },
-        email:{
-            type: String,
-            required: true,
-            unique: true,
-            trim: true,
-            lowercase: true, //stores emails in lowercase
+  {
+    username: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
     },
-    password:{
-        type: String,
-        required: true,
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true, //stores emails in lowercase
     },
-    profilePicture:{
-        type: String,
-        default: "",
+    password: {
+      type: String,
+      required: true,
     },
-    status:{
-        type: String,
-        default: "offline",
+    profilePicture: {
+      type: String,
+      default: "",
     },
-    isAdmin:{
-        type: Boolean,
-        default: false,
+    status: {
+      type: String,
+      default: "offline",
     },
-}, {
+    // A short "about" line the user can set, e.g. "Working from home"
+    statusMessage: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    isAdmin: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
     timestamps: true, // auto adds createdat and updatedAt fields
-}
-)
+  },
+);
 
 // Reuse the already-compiled model if it exists, otherwise create it.
 // This prevents "Cannot overwrite model" errors when the dev server hot-reloads.

@@ -23,4 +23,43 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
+// PUT /api/users/profile  ->  update the logged-in user's own profile
+router.put("/profile", requireAuth, async (req, res) => {
+  try {
+    const currentUserId = (req as any).userId;
+
+    // Read the fields the user wants to change
+    const newUsername = req.body.username;
+    const newStatusMessage = req.body.statusMessage;
+
+    // Build an object with only the fields that were actually provided,
+    // so a user can update just one thing without wiping the other.
+    const fieldsToUpdate: { username?: string; statusMessage?: string } = {};
+
+    if (newUsername !== undefined) {
+      fieldsToUpdate.username = newUsername;
+    }
+    if (newStatusMessage !== undefined) {
+      fieldsToUpdate.statusMessage = newStatusMessage;
+    }
+
+    // Update the user and get the UPDATED document back.
+    // { new: true } returns the document AFTER the change (not before).
+    // .select("-password") keeps the password hash out of the response.
+    const updatedUser = await User.findByIdAndUpdate(
+      currentUserId,
+      fieldsToUpdate,
+      { new: true }
+    ).select("-password");
+
+    res.status(200).json({
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.log("Error updating profile:", error);
+    res.status(500).json({ message: "Something went wrong on the server" });
+  }
+});
+
 export default router;
