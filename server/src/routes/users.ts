@@ -1,5 +1,5 @@
 import express from "express";
-import User from "../models/user";
+import User from "../models/User";
 import requireAuth from "../middleware/auth";
 
 const router = express.Router();
@@ -8,7 +8,7 @@ const router = express.Router();
 router.get("/", requireAuth, async (req, res) => {
   try {
     // requireAuth attached the logged-in user's id to the request
-    const currentUserId = req.userId;
+    const currentUserId = (req as any).userId;
 
     // $ne means "not equal": find users whose _id is NOT mine.
     // .select("-password") removes the password hash from the results.

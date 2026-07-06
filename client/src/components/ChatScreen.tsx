@@ -169,7 +169,19 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
         });
         setMessage("");
     }
+    // Make a sorted copy of contacts: those with unread messages come first.
+    // We copy the array first (with the spread) so we never mutate state directly.
+    const sortedContacts = [...contacts].sort((firstContact, secondContact) => {
+        const firstUnread = unreadIds[firstContact._id]
+            ? unreadIds[firstContact._id].length
+            : 0;
+        const secondUnread = unreadIds[secondContact._id]
+            ? unreadIds[secondContact._id].length
+            : 0;
 
+        // Higher unread count should come first (descending order)
+        return secondUnread - firstUnread;
+    });
     return (
         <div className="h-screen flex flex-col bg-gradient-to-br from-purple-600 to-blue-500 text-white overflow-hidden">
 
@@ -207,7 +219,7 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
                                 No other users yet. Sign up a second account to chat.
                             </p>
                         ) : (
-                            contacts.map((contact) => {
+                            sortedContacts.map((contact) => {
                                 const isSelected =
                                     selectedContact !== null &&
                                     selectedContact._id === contact._id;
@@ -231,7 +243,16 @@ function ChatScreen({ currentUser, onLogout }: ChatScreenProps) {
                                         ></span>
 
                                         {/* Username takes the available space */}
-                                        <span className="flex-1">{contact.username}</span>
+                                        <span
+                                            className={
+                                                "flex-1 " +
+                                                (unreadIds[contact._id] && unreadIds[contact._id].length > 0
+                                                    ? "font-bold"
+                                                    : "")
+                                            }
+                                        >
+                                            {contact.username}
+                                        </span>
 
                                         {/* Unread badge - shows the number of unread message ids */}
                                         {unreadIds[contact._id] && unreadIds[contact._id].length > 0 && (
