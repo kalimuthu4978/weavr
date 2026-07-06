@@ -8,6 +8,7 @@ import Message from "./models/Message";
 import User from "./models/User";
 import cors from "cors";
 import userRoutes from "./routes/users";
+import messageRoutes from "./routes/messages";
 
 
 // Load environment variables from .env file
@@ -22,6 +23,8 @@ app.use(express.json());
 
 // Allow our React app (port 5173) to make HTTP requests to this server
 app.use(cors({ origin: "http://localhost:5173" }));
+
+app.use("/api/messages", messageRoutes);
 
 // Connect to MongoDB
 connectToDatabase();

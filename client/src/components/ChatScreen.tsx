@@ -24,6 +24,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     const [isConnected, setIsConnected] = useState(socket.connected);
     const [message, setMessage] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [searchTerm, setSearchTerm] = useState("");
     // Live status per user id, e.g. { "6a49f9...": "online" }
     const [statusMap, setStatusMap] = useState<Record<string, string>>({});
     // How many unread messages per user id, e.g. { "6a49f9...": 3 }
@@ -146,13 +147,13 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     // --- When I pick a contact, load that conversation ---
     function handleSelectContact(contact: ContactUser) {
         setSelectedContact(contact);
-        setMessages([]); // clear the old conversation while the new one loads
+        setMessages([]);
+        setSearchTerm("");   // <-- reset search for the new conversation
         socket.emit("getConversation", contact._id);
 
-        // Clear the unread badge for this contact - we're reading them now
         setUnreadIds((previous) => {
             const updated = { ...previous };
-            updated[contact._id] = []; // empty list = no unread = no badge
+            updated[contact._id] = [];
             return updated;
         });
     }
@@ -185,6 +186,15 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
         // Higher unread count should come first (descending order)
         return secondUnread - firstUnread;
     });
+    // Filter the open conversation by the search term (case-insensitive).
+    // Empty box = show everything.
+    const searchTermLower = searchTerm.trim().toLowerCase();
+    const filteredMessages =
+        searchTermLower === ""
+            ? messages
+            : messages.filter((oneMessage) =>
+                oneMessage.text.toLowerCase().includes(searchTermLower)
+            );
     return (
         <div className="h-screen flex flex-col bg-gradient-to-br from-purple-600 to-blue-500 text-white overflow-hidden">
             {showProfile && (
@@ -293,9 +303,30 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                         </div>
                     ) : (
                         <>
-                            {/* Who I'm talking to */}
-                            <div className="px-4 py-3 border-b border-gray-200 font-semibold text-purple-700">
-                                {selectedContact.username}
+                            {/* Header row: contact info on the left, search on the right */}
+                            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-4">
+
+                                {/* Who I'm talking to */}
+                                <div>
+                                    <div className="font-semibold text-purple-700">
+                                        {selectedContact.username}
+                                    </div>
+                                    {selectedContact.statusMessage &&
+                                        selectedContact.statusMessage.trim() !== "" && (
+                                            <div className="text-xs text-gray-500">
+                                                {selectedContact.statusMessage}
+                                            </div>
+                                        )}
+                                </div>
+
+                                {/* Search within this conversation */}
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search messages..."
+                                    className="w-56 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                                />
                             </div>
 
                             {/* Messages */}
@@ -304,9 +335,12 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                     <p className="text-gray-400 text-center mt-4">
                                         No messages yet. Say hello!
                                     </p>
+                                ) : filteredMessages.length === 0 ? (
+                                    <p className="text-gray-400 text-center mt-4">
+                                        No messages match "{searchTerm}"
+                                    </p>
                                 ) : (
-                                    messages.map((singleMessage) => {
-                                        // Is this message from me? Then align it right and colour it.
+                                    filteredMessages.map((singleMessage) => {
                                         const isMine = singleMessage.sender === currentUser.id;
                                         return (
                                             <div

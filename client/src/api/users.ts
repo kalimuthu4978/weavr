@@ -7,7 +7,8 @@ export type ContactUser = {
   _id: string;
   username: string;
   email: string;
-  status: string;   // <-- add this
+  status: string;
+  statusMessage?: string;   // <-- add this (optional; may be empty)
 };
 
 // Fetch every other user (the backend excludes the logged-in one)
