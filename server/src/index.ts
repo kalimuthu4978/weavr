@@ -10,7 +10,8 @@ import cors from "cors";
 import userRoutes from "./routes/users";
 import messageRoutes from "./routes/messages";
 import groupRoutes from "./routes/groups";
-
+import Group from "./models/Group";
+import GroupMessage from "./models/GroupMessage";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -67,6 +68,19 @@ io.on("connection", async (socket) => {
       io.emit("userStatusChanged", { userId: userId, status: "online" });
     } catch (error) {
       console.log("Error setting user online:", error);
+    }
+  }
+  // Join a room for every group this user belongs to,
+  // so they receive messages sent to any of their groups.
+  if (userId) {
+    try {
+      const myGroups = await Group.find({ members: userId });
+      myGroups.forEach((oneGroup) => {
+        // Room name = the group's id (as a string)
+        socket.join(oneGroup._id.toString());
+      });
+    } catch (error) {
+      console.log("Error joining group rooms:", error);
     }
   }
 
@@ -131,6 +145,46 @@ io.on("connection", async (socket) => {
       socket.emit("loadMessages", conversation);
     } catch (error) {
       console.log("Error loading conversation:", error);
+    }
+  });
+
+  // Send a message to a whole group
+  socket.on("sendGroupMessage", async (data) => {
+    try {
+      const text = data.text;
+      const groupId = data.groupId;
+
+      if (!userId) {
+        console.log("Cannot send group message: no userId on socket");
+        return;
+      }
+
+      // Safety: confirm the sender is actually a member of this group
+      const group = await Group.findById(groupId);
+      if (!group) {
+        return;
+      }
+      const isMember = group.members.some(
+        (memberId) => memberId.toString() === userId,
+      );
+      if (!isMember) {
+        console.log("Blocked: sender is not a member of this group");
+        return;
+      }
+
+      // Save the group message
+      const newGroupMessage = new GroupMessage({
+        text: text,
+        sender: userId,
+        group: groupId,
+      });
+      await newGroupMessage.save();
+
+      // Emit to the GROUP'S room -> every connected member receives it,
+      // including the sender (so their own screen updates).
+      io.to(groupId).emit("receiveGroupMessage", newGroupMessage);
+    } catch (error) {
+      console.log("Error sending group message:", error);
     }
   });
 
