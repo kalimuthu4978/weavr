@@ -27,3 +27,37 @@ export async function fetchGroups(): Promise<Group[]> {
 
   return data;
 }
+
+// A message that belongs to a group
+export type GroupMessageData = {
+  _id: string;
+  text: string;
+  sender: string;
+  group: string;
+  createdAt: string;
+};
+
+// Load the message history for one group
+export async function fetchGroupMessages(
+  groupId: string
+): Promise<GroupMessageData[]> {
+  const token = getToken();
+
+  const response = await fetch(
+    "http://localhost:5000/api/groups/" + groupId + "/messages",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to load group messages");
+  }
+
+  return data;
+}

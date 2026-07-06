@@ -6,8 +6,9 @@ import type { ContactUser } from "../api/users";
 import ProfilePanel from "./ProfilePanel";
 import { searchMessages } from "../api/messages";
 import type { SearchResultMessage } from "../api/messages";
-import { fetchGroups } from "../api/groups";
+import { fetchGroups, fetchGroupMessages } from "../api/groups";
 import type { Group } from "../api/groups";
+
 
 type ChatMessage = {
     _id: string;
@@ -16,7 +17,13 @@ type ChatMessage = {
     receiver: string;
     createdAt: string;
 };
-
+type GroupMessage = {
+    _id: string;
+    text: string;
+    sender: string;
+    group: string;
+    createdAt: string;
+};
 type ChatScreenProps = {
     currentUser: StoredUser;
     onLogout: () => void;
@@ -35,6 +42,8 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     const [searchResults, setSearchResults] = useState<SearchResultMessage[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+    const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
     // Live status per user id, e.g. { "6a49f9...": "online" }
     const [statusMap, setStatusMap] = useState<Record<string, string>>({});
     // How many unread messages per user id, e.g. { "6a49f9...": 3 }
@@ -47,9 +56,11 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     const [selectedContact, setSelectedContact] = useState<ContactUser | null>(
         null
     );
+    const selectedContactName = selectedContact?.username ?? "";
+    const selectedContactStatusMessage = selectedContact?.statusMessage ?? "";
 
     // --- Load the contact list once when the chat opens ---
-// --- Load the contact list and groups once when the chat opens ---
+    // --- Load the contact list and groups once when the chat opens ---
     useEffect(() => {
         async function loadContacts() {
             try {
@@ -168,9 +179,10 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
 
     // --- When I pick a contact, load that conversation ---
     function handleSelectContact(contact: ContactUser) {
+        setSelectedGroup(null);   // <-- clear group when picking a person
         setSelectedContact(contact);
         setMessages([]);
-        setSearchTerm("");   // <-- reset search for the new conversation
+        setSearchTerm("");
         socket.emit("getConversation", contact._id);
 
         setUnreadIds((previous) => {
@@ -178,6 +190,22 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             updated[contact._id] = [];
             return updated;
         });
+    }
+
+    // --- When I pick a group, open it and load its history ---
+    async function handleSelectGroup(group: Group) {
+        // A group and a contact are mutually exclusive - clear the contact
+        setSelectedContact(null);
+        setSelectedGroup(group);
+        setGroupMessages([]); // clear old group messages while loading
+        setSearchTerm("");
+
+        try {
+            const history = await fetchGroupMessages(group._id);
+            setGroupMessages(history);
+        } catch (error) {
+            console.log("Could not load group messages:", error);
+        }
     }
 
     // --- Send a message to the selected contact ---
@@ -383,6 +411,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                     groups.map((oneGroup) => (
                                         <button
                                             key={oneGroup._id}
+                                            onClick={() => handleSelectGroup(oneGroup)}
                                             className="w-full text-left px-4 py-3 hover:bg-purple-50 transition flex items-center gap-2"
                                         >
                                             {/* A simple group icon using initials */}
@@ -456,10 +485,59 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
 
                 {/* Conversation panel */}
                 <div className="bg-white text-gray-800 rounded-xl flex-1 flex flex-col shadow-lg overflow-hidden">
-                    {selectedContact === null ? (
+                    {selectedContact === null && selectedGroup === null ? (
                         <div className="flex-1 flex items-center justify-center text-gray-400">
-                            Pick a contact to start chatting
+                            Pick a contact or group to start chatting
                         </div>
+                    ) : selectedGroup !== null ? (
+                        // --- GROUP VIEW ---
+                        <>
+                            {/* Group header */}
+                            <div className="px-4 py-3 border-b border-gray-200">
+                                <div className="font-semibold text-purple-700">
+                                    {selectedGroup.name}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                    {selectedGroup.members.length} members
+                                </div>
+                            </div>
+
+                            {/* Group messages */}
+                            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                                {groupMessages.length === 0 ? (
+                                    <p className="text-gray-400 text-center mt-4">
+                                        No messages yet. Start the conversation!
+                                    </p>
+                                ) : (
+                                    groupMessages.map((oneMessage) => {
+                                        const isMine = oneMessage.sender === currentUser.id;
+                                        return (
+                                            <div
+                                                key={oneMessage._id}
+                                                className={
+                                                    "max-w-[70%] px-3 py-2 rounded-lg " +
+                                                    (isMine
+                                                        ? "bg-purple-600 text-white ml-auto"
+                                                        : "bg-purple-100 text-purple-900")
+                                                }
+                                            >
+                                                {oneMessage.text}
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            {/* Group input - not wired to send yet (that's group-iv-c) */}
+                            <div className="border-t border-gray-200 p-3 flex gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Group messaging coming in the next step..."
+                                    disabled
+                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-gray-400"
+                                />
+                            </div>
+                        </>
                     ) : (
                         <>
                             {/* Header row: contact info on the left, search on the right */}
