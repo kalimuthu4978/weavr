@@ -1,6 +1,6 @@
 import express from "express";
 import bcrypt from "bcryptjs";
-import User from "../models/user";
+import User from "../models/User";
 import jwt from "jsonwebtoken";
 import requireAuth from "../middleware/auth";
 
@@ -93,6 +93,15 @@ router.post("/login", async (req, res) => {
     });
 
     // 6. Send back the token and basic user info
+    res.status(200).json({
+      message: "Logged in successfully",
+      token: token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+      },
+    });
     res.status(200).json({
       message: "Logged in successfully",
       token: token,

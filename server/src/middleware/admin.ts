@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import User from "../models/user";
+import User from "../models/User";
 
 // This runs AFTER requireAuth. It checks the logged-in user is an admin.
 async function requireAdmin(req: Request, res: Response, next: NextFunction) {
