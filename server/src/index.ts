@@ -14,6 +14,7 @@ import Group from "./models/Group";
 import GroupMessage from "./models/GroupMessage";
 import uploadRoutes from "./routes/upload";
 import path from "path";
+import adminRoutes from "./routes/admin";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -33,6 +34,8 @@ app.use("/api/groups", groupRoutes);
 app.use("/api/messages", messageRoutes);
 
 app.use("/api/upload", uploadRoutes);
+
+app.use("/api/admin", adminRoutes);
 
 // Serve uploaded files as static files, so /uploads/abc.png returns the image
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
