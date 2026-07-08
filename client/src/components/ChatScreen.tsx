@@ -541,7 +541,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                     <p className="text-gray-400 text-sm text-center mt-4 px-2">
                                         No other users yet. Sign up a second account to chat.
                                     </p>
-                                ) : (
+                                ) :  (
                                     sortedContacts.map((contact) => {
                                         const isSelected =
                                             selectedContact !== null &&
@@ -583,10 +583,10 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                             </button>
                                         );
                                     })
-                                )}
+                                ) }
                             </div>
                         </>
-                    )}
+                    ) }
                 </div>
 
                 {/* Conversation panel */}
@@ -652,7 +652,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                 </button>
                             </div>
                         </>
-                    ) : (
+                    ) : selectedContact !== null ? (
                         <>
                             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-4">
                                 <div>
@@ -812,7 +812,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                 </button>
                             </div>
                         </>
-                    )}
+                    ) : null}
                 </div>
 
             </div>
