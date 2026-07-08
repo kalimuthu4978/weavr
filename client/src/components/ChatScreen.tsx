@@ -11,18 +11,16 @@ import type { Group } from "../api/groups";
 import CreateGroupPanel from "./CreateGroupPanel";
 import { uploadFile } from "../api/upload";
 
-
 type ChatMessage = {
     _id: string;
     text: string;
     sender: string;
     receiver: string;
-    fileUrl?: string;    // optional - present only for image messages
+    fileUrl?: string;
     fileName?: string;
-    fileType?: string;
+    fileType?: string; // "image" | "file" | ""
     createdAt: string;
 };
-
 
 type GroupMessage = {
     _id: string;
@@ -31,6 +29,7 @@ type GroupMessage = {
     group: string;
     createdAt: string;
 };
+
 type ChatScreenProps = {
     currentUser: StoredUser;
     onLogout: () => void;
@@ -44,46 +43,35 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [groups, setGroups] = useState<Group[]>([]);
-    // Global search (across all conversations)
     const [globalSearchTerm, setGlobalSearchTerm] = useState("");
     const [searchResults, setSearchResults] = useState<SearchResultMessage[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
     const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
     const [groupMessageText, setGroupMessageText] = useState("");
-    // Live status per user id, e.g. { "6a49f9...": "online" }
     const [statusMap, setStatusMap] = useState<Record<string, string>>({});
     const [showCreateGroup, setShowCreateGroup] = useState(false);
-    // How many unread messages per user id, e.g. { "6a49f9...": 3 }
-    // Unread message IDs per user id, e.g. { "6a49f9...": ["msgId1", "msgId2"] }
     const [unreadIds, setUnreadIds] = useState<Record<string, string[]>>({});
 
-    // An image that's been uploaded but not sent yet (staged for sending)
     const [pendingFileUrl, setPendingFileUrl] = useState("");
     const [pendingFileName, setPendingFileName] = useState("");
     const [pendingFileType, setPendingFileType] = useState("");
-
     const [isUploading, setIsUploading] = useState(false);
 
-    // The list of people I can chat with
     const [contacts, setContacts] = useState<ContactUser[]>([]);
-    // The person I'm currently chatting with (null = none selected yet)
-    const [selectedContact, setSelectedContact] = useState<ContactUser | null>(
-        null
-    );
-    const selectedContactName = selectedContact?.username ?? "";
-    const selectedContactStatusMessage = selectedContact?.statusMessage ?? "";
+    const [selectedContact, setSelectedContact] = useState<ContactUser | null>(null);
 
-    // --- Load the contact list once when the chat opens ---
-    // --- Load the contact list and groups once when the chat opens ---
+    const [openFile, setOpenFile] = useState<{
+        url: string;
+        name: string;
+        type: string;
+    } | null>(null);
+
     useEffect(() => {
         async function loadContacts() {
             try {
                 const users = await fetchUsers();
                 setContacts(users);
-
-                // Seed the status map with each contact's current status from the DB
                 const initialStatus: Record<string, string> = {};
                 users.forEach((oneUser) => {
                     initialStatus[oneUser._id] = oneUser.status;
@@ -107,7 +95,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
         loadGroups();
     }, []);
 
-    // --- Socket listeners (connection + incoming messages) ---
     useEffect(() => {
         function onConnect() {
             setIsConnected(true);
@@ -119,7 +106,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             setMessages(pastMessages);
         }
         function onUserStatusChanged(data: { userId: string; status: string }) {
-            // Update just this one user's status in the map
             setStatusMap((previous) => {
                 const updated = { ...previous };
                 updated[data.userId] = data.status;
@@ -127,14 +113,12 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             });
         }
         function onReceiveGroupMessage(newGroupMessage: GroupMessage) {
-            // Only show it if it belongs to the group I'm currently viewing.
             setSelectedGroup((currentlyOpenGroup) => {
                 if (
                     currentlyOpenGroup !== null &&
                     currentlyOpenGroup._id === newGroupMessage.group
                 ) {
                     setGroupMessages((previous) => {
-                        // Dedupe by _id (same idempotency guard as 1-on-1 messages)
                         const alreadyExists = previous.some(
                             (existing) => existing._id === newGroupMessage._id
                         );
@@ -149,8 +133,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
         }
         function onReceiveMessage(newMessage: ChatMessage) {
             setSelectedContact((currentlySelected) => {
-                // Figure out who the "other person" in this message is.
-                // If I'm the sender, the other person is the receiver, and vice versa.
                 const otherPersonId =
                     newMessage.sender === currentUser.id
                         ? newMessage.receiver
@@ -161,7 +143,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                     currentlySelected._id === otherPersonId;
 
                 if (isForOpenChat) {
-                    // I'm looking at this conversation -> just show the message
                     setMessages((previous) => {
                         const alreadyExists = previous.some(
                             (existing) => existing._id === newMessage._id
@@ -172,17 +153,12 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                         return [...previous, newMessage];
                     });
                 } else {
-                    // Message is for a chat I'm NOT viewing -> record it as unread,
-                    // but only if we haven't already counted this exact message id.
                     if (newMessage.sender !== currentUser.id) {
                         setUnreadIds((previous) => {
                             const existingIds = previous[otherPersonId] || [];
-
-                            // If this message id is already recorded, do nothing (no double count)
                             if (existingIds.includes(newMessage._id)) {
                                 return previous;
                             }
-
                             const updated = { ...previous };
                             updated[otherPersonId] = [...existingIds, newMessage._id];
                             return updated;
@@ -194,8 +170,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             });
         }
 
-        // Safety: remove any leftover listeners before adding fresh ones,
-        // so we never stack duplicates.
         socket.off("receiveMessage");
         socket.off("loadMessages");
         socket.off("receiveGroupMessage");
@@ -217,9 +191,8 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
         };
     }, []);
 
-    // --- When I pick a contact, load that conversation ---
     function handleSelectContact(contact: ContactUser) {
-        setSelectedGroup(null);   // <-- clear group when picking a person
+        setSelectedGroup(null);
         setSelectedContact(contact);
         setMessages([]);
         setSearchTerm("");
@@ -232,14 +205,11 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
         });
     }
 
-    // --- When I pick a group, open it and load its history ---
     async function handleSelectGroup(group: Group) {
-        // A group and a contact are mutually exclusive - clear the contact
         setSelectedContact(null);
         setSelectedGroup(group);
-        setGroupMessages([]); // clear old group messages while loading
+        setGroupMessages([]);
         setSearchTerm("");
-
         try {
             const history = await fetchGroupMessages(group._id);
             setGroupMessages(history);
@@ -248,60 +218,50 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
         }
     }
 
-    // --- Send a message to the selected contact ---
     function handleSendMessage() {
         if (selectedContact === null) {
             return;
         }
-
         const hasText = message.trim() !== "";
-        const hasImage = pendingFileUrl !== "";
-
-        // Nothing to send
-        if (!hasText && !hasImage) {
+        const hasFile = pendingFileUrl !== "";
+        if (!hasText && !hasFile) {
             return;
         }
-
         socket.emit("sendMessage", {
             text: message,
             receiverId: selectedContact._id,
-            fileUrl: pendingFileUrl,   // "" if no image staged
+            fileUrl: pendingFileUrl,
             fileName: pendingFileName,
             fileType: pendingFileType,
         });
-
-        // Clear both the text and the staged image
         setMessage("");
         setPendingFileUrl("");
         setPendingFileName("");
         setPendingFileType("");
     }
-    // --- Send a message to the currently open group ---
+
     function handleSendGroupMessage() {
         if (groupMessageText.trim() === "") {
             return;
         }
         if (selectedGroup === null) {
-            return; // no group open, nothing to do
+            return;
         }
-
         socket.emit("sendGroupMessage", {
             text: groupMessageText,
             groupId: selectedGroup._id,
         });
         setGroupMessageText("");
     }
+
     async function handleGlobalSearch() {
         const term = globalSearchTerm.trim();
-
         if (term === "") {
             setSearchResults([]);
-            setHasSearched(false);   // <-- empty search exits search mode
+            setHasSearched(false);
             return;
         }
-
-        setHasSearched(true);      // <-- we've now run a search
-        setIsSearching(true);
+        setHasSearched(true);
         try {
             const results = await searchMessages(term);
             setSearchResults(results);
@@ -309,36 +269,28 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             console.log("Search error:", error);
             setSearchResults([]);
         }
-        setIsSearching(false);
     }
 
     function handleOpenSearchResult(result: SearchResultMessage) {
-        // Whoever isn't me is the conversation partner
         const otherPersonId =
             result.sender === currentUser.id ? result.receiver : result.sender;
-
-        // Find that contact in our contacts list
         const matchingContact = contacts.find(
             (oneContact) => oneContact._id === otherPersonId
         );
-
         if (matchingContact) {
-            handleSelectContact(matchingContact); // opens that conversation
-            // Clear the search after jumping in
+            handleSelectContact(matchingContact);
             setGlobalSearchTerm("");
             setSearchResults([]);
             setHasSearched(false);
         }
     }
-    // Called when the user picks an image file to send
-    // Called when the user picks an image: upload it and stage it for sending
+
     async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
         const files = event.target.files;
         if (!files || files.length === 0) {
             return;
         }
         const file = files[0];
-
         setIsUploading(true);
         try {
             const uploadResult = await uploadFile(file);
@@ -346,15 +298,12 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             setPendingFileName(uploadResult.fileName);
             setPendingFileType(uploadResult.fileType);
         } catch (error) {
-            console.log("Could not upload image:", error);
+            console.log("Could not upload file:", error);
         }
         setIsUploading(false);
-
-        // Reset the input so the same file can be re-picked later
         event.target.value = "";
     }
-    // Make a sorted copy of contacts: those with unread messages come first.
-    // We copy the array first (with the spread) so we never mutate state directly.
+
     const sortedContacts = [...contacts].sort((firstContact, secondContact) => {
         const firstUnread = unreadIds[firstContact._id]
             ? unreadIds[firstContact._id].length
@@ -362,12 +311,9 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
         const secondUnread = unreadIds[secondContact._id]
             ? unreadIds[secondContact._id].length
             : 0;
-
-        // Higher unread count should come first (descending order)
         return secondUnread - firstUnread;
     });
-    // Filter the open conversation by the search term (case-insensitive).
-    // Empty box = show everything.
+
     const searchTermLower = searchTerm.trim().toLowerCase();
     const filteredMessages =
         searchTermLower === ""
@@ -375,6 +321,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             : messages.filter((oneMessage) =>
                 oneMessage.text.toLowerCase().includes(searchTermLower)
             );
+
     return (
         <div className="h-screen flex flex-col bg-gradient-to-br from-purple-600 to-blue-500 text-white overflow-hidden">
             {showProfile && (
@@ -387,23 +334,67 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                     }}
                 />
             )}
+
             {showCreateGroup && (
                 <CreateGroupPanel
                     contacts={contacts}
                     onClose={() => setShowCreateGroup(false)}
                     onGroupCreated={(newGroup) => {
-                        // Add the new group to the list right away
                         setGroups((previous) => [newGroup, ...previous]);
                         setShowCreateGroup(false);
-
-                        // Reconnect the socket so it joins the new group's room.
-                        // (Rooms are joined on connect; a brand-new group needs a
-                        // fresh connect for live messages to reach us.)
                         socket.disconnect();
                         socket.connect();
                     }}
                 />
             )}
+
+            {openFile !== null && (
+                <div
+                    className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+                    onClick={() => setOpenFile(null)}
+                >
+                    <div
+                        className="bg-white text-gray-800 rounded-xl shadow-xl max-w-lg w-full p-5"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-4">
+                            <span className="font-semibold text-purple-700 truncate">
+                                {openFile.name}
+                            </span>
+                            <button
+                                onClick={() => setOpenFile(null)}
+                                className="text-gray-500 hover:text-gray-700 text-xl leading-none"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {openFile.type === "image" ? (
+                            <img
+                                src={openFile.url}
+                                alt={openFile.name}
+                                className="w-full max-h-[60vh] object-contain rounded-lg mb-4"
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-10 mb-4">
+                                <span className="text-6xl mb-3">📄</span>
+                                <span className="text-sm text-gray-500">{openFile.name}</span>
+                            </div>
+                        )}
+
+                        <a
+                            href={openFile.url}
+                            download={openFile.name}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block text-center bg-purple-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-purple-700 transition"
+                        >
+                            Download
+                        </a>
+                    </div>
+                </div>
+            )}
+
             {/* Top bar */}
             <div className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
@@ -430,14 +421,11 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                 </div>
             </div>
 
-            {/* Main area: contacts on the left, chat on the right */}
+            {/* Main area */}
             <div className="flex-1 flex gap-4 px-6 pb-6 overflow-hidden min-h-0">
 
-                {/* Contacts list */}
-                {/* Contacts panel (also holds search + results) */}
+                {/* Contacts panel */}
                 <div className="bg-white text-gray-800 rounded-xl w-72 flex flex-col shadow-lg overflow-hidden">
-
-                    {/* Search box - pinned at the very top of the panel */}
                     <div className="px-3 py-3 border-b border-gray-200">
                         <input
                             type="text"
@@ -454,7 +442,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                     </div>
 
                     {hasSearched ? (
-                        // --- SEARCH MODE: results replace the contact list ---
                         <div className="flex-1 overflow-y-auto">
                             <div className="px-4 py-2 flex items-center justify-between">
                                 <span className="text-xs font-semibold text-gray-500">
@@ -474,11 +461,10 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
 
                             {searchResults.length === 0 ? (
                                 <p className="text-gray-400 text-sm text-center mt-4 px-2">
-                                    Press Enter to search. No results to show yet.
+                                    No messages found.
                                 </p>
                             ) : (
                                 searchResults.map((result) => {
-                                    // Work out who the conversation is with, for a small label
                                     const otherPersonId =
                                         result.sender === currentUser.id
                                             ? result.receiver
@@ -504,9 +490,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                             )}
                         </div>
                     ) : (
-                        // --- NORMAL MODE: the contact list ---
                         <>
-                            {/* Groups section */}
                             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                                 <span className="font-semibold text-purple-700">Groups</span>
                                 <button
@@ -528,7 +512,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                             onClick={() => handleSelectGroup(oneGroup)}
                                             className="w-full text-left px-4 py-3 hover:bg-purple-50 transition flex items-center gap-2"
                                         >
-                                            {/* A simple group icon using initials */}
                                             <span className="w-6 h-6 rounded-full bg-purple-200 text-purple-700 text-xs font-bold flex items-center justify-center">
                                                 {oneGroup.name
                                                     ? oneGroup.name.charAt(0).toUpperCase()
@@ -604,9 +587,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                             Pick a contact or group to start chatting
                         </div>
                     ) : selectedGroup !== null ? (
-                        // --- GROUP VIEW ---
                         <>
-                            {/* Group header */}
                             <div className="px-4 py-3 border-b border-gray-200">
                                 <div className="font-semibold text-purple-700">
                                     {selectedGroup.name}
@@ -616,7 +597,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                 </div>
                             </div>
 
-                            {/* Group messages */}
                             <div className="flex-1 overflow-y-auto p-4 space-y-2">
                                 {groupMessages.length === 0 ? (
                                     <p className="text-gray-400 text-center mt-4">
@@ -642,7 +622,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                 )}
                             </div>
 
-                            {/* Group input */}
                             <div className="border-t border-gray-200 p-3 flex gap-2">
                                 <input
                                     type="text"
@@ -666,10 +645,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                         </>
                     ) : (
                         <>
-                            {/* Header row: contact info on the left, search on the right */}
                             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-4">
-
-                                {/* Who I'm talking to */}
                                 <div>
                                     <div className="font-semibold text-purple-700">
                                         {selectedContact.username}
@@ -682,7 +658,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                         )}
                                 </div>
 
-                                {/* Search within this conversation */}
                                 <input
                                     type="text"
                                     value={searchTerm}
@@ -692,7 +667,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                 />
                             </div>
 
-                            {/* Messages */}
                             <div className="flex-1 overflow-y-auto p-4 space-y-2">
                                 {messages.length === 0 ? (
                                     <p className="text-gray-400 text-center mt-4">
@@ -723,12 +697,28 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                                     <img
                                                         src={singleMessage.fileUrl}
                                                         alt={singleMessage.fileName || "image"}
+                                                        onClick={() =>
+                                                            setOpenFile({
+                                                                url: singleMessage.fileUrl || "",
+                                                                name: singleMessage.fileName || "image",
+                                                                type: "image",
+                                                            })
+                                                        }
                                                         className="rounded-lg max-w-full max-h-64 cursor-pointer"
                                                     />
                                                 ) : isFile ? (
-                                                    <div className="flex items-center gap-2">
+                                                    <div
+                                                        onClick={() =>
+                                                            setOpenFile({
+                                                                url: singleMessage.fileUrl || "",
+                                                                name: singleMessage.fileName || "File",
+                                                                type: "file",
+                                                            })
+                                                        }
+                                                        className="flex items-center gap-2 cursor-pointer"
+                                                    >
                                                         <span className="text-2xl">📄</span>
-                                                        <span className="text-sm underline cursor-pointer">
+                                                        <span className="text-sm underline">
                                                             {singleMessage.fileName || "File"}
                                                         </span>
                                                     </div>
@@ -740,7 +730,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                     })
                                 )}
                             </div>
-                            {/* Staged file preview (shows before sending) */}
+
                             {pendingFileUrl !== "" && (
                                 <div className="border-t border-gray-200 px-3 pt-3 flex items-center gap-3">
                                     {pendingFileType === "image" ? (
@@ -769,9 +759,8 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                     </button>
                                 </div>
                             )}
-                            {/* Input */}
+
                             <div className="border-t border-gray-200 p-3 flex gap-2 items-center">
-                                {/* Hidden file input, triggered by the button below */}
                                 <input
                                     type="file"
                                     accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
@@ -782,7 +771,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                 <label
                                     htmlFor="imageUpload"
                                     className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-lg transition"
-                                    title="Send an image"
+                                    title="Send a file"
                                 >
                                     📎
                                 </label>
@@ -798,7 +787,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                     }}
                                     placeholder={
                                         isUploading
-                                            ? "Uploading image..."
+                                            ? "Uploading file..."
                                             : pendingFileUrl !== ""
                                                 ? "Add a caption (optional) and hit Send"
                                                 : "Message " + selectedContact.username + "..."
