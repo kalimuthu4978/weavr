@@ -1,6 +1,6 @@
 import express from "express";
 import bcrypt from "bcryptjs";
-import User from "../models/User";
+import User from "../models/user";
 import jwt from "jsonwebtoken";
 import requireAuth from "../middleware/auth";
 
@@ -63,7 +63,9 @@ router.post("/login", async (req, res) => {
 
     // 1. Make sure both fields were sent
     if (!email || !password) {
-      return res.status(400).json({ message: "Please provide email and password" });
+      return res
+        .status(400)
+        .json({ message: "Please provide email and password" });
     }
 
     // 2. Find the user by their email
@@ -98,14 +100,14 @@ router.post("/login", async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
-      },
+        isAdmin: user.isAdmin, // <-- add this
+      }
     });
   } catch (error) {
     console.log("Login error:", error);
     res.status(500).json({ message: "Something went wrong on the server" });
   }
 });
-
 
 // GET /api/auth/me  ->  returns the logged-in user's id (protected)
 router.get("/me", requireAuth, async (req, res) => {

@@ -9,9 +9,9 @@ export type StoredUser = {
   id: string;
   username: string;
   email: string;
-  statusMessage?: string;   // optional - older sessions may not have it
+  statusMessage?: string;
+  isAdmin?: boolean;   // <-- add this
 };
-
 // Save token + user after a successful login
 export function saveSession(token: string, user: StoredUser) {
   localStorage.setItem(TOKEN_KEY, token);
