@@ -10,18 +10,16 @@ router.post("/", requireAuth, upload.single("file"), (req, res) => {
   try {
     // If the file was rejected (not an image) or missing, req.file is undefined
     if (!req.file) {
-      return res
-        .status(400)
-        .json({
-          message: "No image file received (must be an image under 5MB)",
-        });
+      return res.status(400).json({
+        message: "No image file received (must be an image under 5MB)",
+      });
     }
 
     // Decide a simple type label the frontend can use
     const isImage = req.file.mimetype.startsWith("image/");
     const fileType = isImage ? "image" : "file";
-
-    const fileUrl = "http://localhost:5000/uploads/" + req.file.filename;
+    const serverUrl = process.env.SERVER_URL || "http://localhost:5000";
+    const fileUrl = serverUrl + "/uploads/" + req.file.filename;
 
     res.status(200).json({
       message: "File uploaded successfully",

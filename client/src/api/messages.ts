@@ -1,4 +1,5 @@
 import { getToken } from "../auth/session";
+import { API_BASE_URL } from "../config";
 
 // A message returned from the search endpoint
 export type SearchResultMessage = {
@@ -11,15 +12,14 @@ export type SearchResultMessage = {
 
 // Search all of the logged-in user's messages for a term
 export async function searchMessages(
-  term: string
+  term: string,
 ): Promise<SearchResultMessage[]> {
   const token = getToken();
 
   // encodeURIComponent makes the term safe to put in a URL
   // (handles spaces and special characters correctly)
   const url =
-    "http://localhost:5000/api/messages/search?term=" +
-    encodeURIComponent(term);
+    `${API_BASE_URL}/api/messages/search?term=` + encodeURIComponent(term);
 
   const response = await fetch(url, {
     method: "GET",

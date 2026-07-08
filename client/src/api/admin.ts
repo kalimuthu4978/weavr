@@ -1,7 +1,6 @@
 import { getToken } from "../auth/session";
-import { fetchStats, fetchAllUsers } from "../api/admin";
-
-const ADMIN_URL = "http://localhost:5000/api/admin";
+import { API_BASE_URL } from "../config";
+const ADMIN_URL = `${API_BASE_URL}/api/admin`;
 
 // A small helper so we don't repeat the auth header everywhere
 function authHeader() {

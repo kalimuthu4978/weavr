@@ -1,6 +1,5 @@
 import { getToken } from "../auth/session";
-
-const API_URL = "http://localhost:5000/api/users";
+import { API_BASE_URL } from "../config";
 
 // The shape of a user in the contact list
 export type ContactUser = {
@@ -15,7 +14,7 @@ export type ContactUser = {
 export async function fetchUsers(): Promise<ContactUser[]> {
   const token = getToken();
 
-  const response = await fetch(API_URL, {
+  const response = await fetch(API_BASE_URL, {
     method: "GET",
     headers: {
       // Send the token so the protected route lets us in.
@@ -42,7 +41,7 @@ export async function updateProfile(
 ) {
   const token = getToken();
 
-  const response = await fetch("http://localhost:5000/api/users/profile", {
+  const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",

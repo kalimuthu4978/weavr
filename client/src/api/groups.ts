@@ -1,4 +1,5 @@
 import { getToken } from "../auth/session";
+import { API_BASE_URL } from "../config";
 
 // The shape of a group from the backend
 export type Group = {
@@ -12,7 +13,7 @@ export type Group = {
 export async function fetchGroups(): Promise<Group[]> {
   const token = getToken();
 
-  const response = await fetch("http://localhost:5000/api/groups", {
+  const response = await fetch(`${API_BASE_URL}/api/groups`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -39,18 +40,18 @@ export type GroupMessageData = {
 
 // Load the message history for one group
 export async function fetchGroupMessages(
-  groupId: string
+  groupId: string,
 ): Promise<GroupMessageData[]> {
   const token = getToken();
 
   const response = await fetch(
-    "http://localhost:5000/api/groups/" + groupId + "/messages",
+    `${API_BASE_URL}/api/groups/` + groupId + "/messages",
     {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    }
+    },
   );
 
   const data = await response.json();
@@ -62,11 +63,10 @@ export async function fetchGroupMessages(
   return data;
 }
 
-
 // Create a new group with a name and a list of member ids
 export async function createGroup(
   name: string,
-  memberIds: string[]
+  memberIds: string[],
 ): Promise<Group> {
   const token = getToken();
 

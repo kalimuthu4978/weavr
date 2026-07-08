@@ -1,14 +1,11 @@
 import { io } from "socket.io-client";
 import { getStoredUser } from "./auth/session";
+import { API_BASE_URL } from "./config";
 
-const SERVER_URL = "http://localhost:5000";
-
-// Read the logged-in user (if any) so we can tell the server who we are
 const storedUser = getStoredUser();
 
-// Pass the user id along with the connection using "auth"
-const socket = io(SERVER_URL, {
-  autoConnect: false,   // we connect manually after login instead
+const socket = io(API_BASE_URL, {
+  autoConnect: false,
   auth: {
     userId: storedUser ? storedUser.id : null,
   },
