@@ -21,7 +21,7 @@ dotenv.config();
 
 // Create the Express application
 const app = express();
-const port = 5000;
+const port = process.env.PORT || 5000;;
 
 // Let the server understand JSON in the request body
 app.use(express.json());
