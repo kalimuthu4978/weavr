@@ -19,6 +19,7 @@ type ChatMessage = {
     receiver: string;
     fileUrl?: string;    // optional - present only for image messages
     fileName?: string;
+    fileType?: string;
     createdAt: string;
 };
 
@@ -61,6 +62,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     // An image that's been uploaded but not sent yet (staged for sending)
     const [pendingFileUrl, setPendingFileUrl] = useState("");
     const [pendingFileName, setPendingFileName] = useState("");
+    const [pendingFileType, setPendingFileType] = useState("");
 
     const [isUploading, setIsUploading] = useState(false);
 
@@ -265,12 +267,14 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             receiverId: selectedContact._id,
             fileUrl: pendingFileUrl,   // "" if no image staged
             fileName: pendingFileName,
+            fileType: pendingFileType,
         });
 
         // Clear both the text and the staged image
         setMessage("");
         setPendingFileUrl("");
         setPendingFileName("");
+        setPendingFileType("");
     }
     // --- Send a message to the currently open group ---
     function handleSendGroupMessage() {
@@ -338,9 +342,9 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
         setIsUploading(true);
         try {
             const uploadResult = await uploadFile(file);
-            // Hold the uploaded file - don't send yet
             setPendingFileUrl(uploadResult.fileUrl);
             setPendingFileName(uploadResult.fileName);
+            setPendingFileType(uploadResult.fileType);
         } catch (error) {
             console.log("Could not upload image:", error);
         }
@@ -701,8 +705,9 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                 ) : (
                                     filteredMessages.map((singleMessage) => {
                                         const isMine = singleMessage.sender === currentUser.id;
-                                        const isImage =
-                                            singleMessage.fileUrl &&
+                                        const isImage = singleMessage.fileType === "image";
+                                        const isFile =
+                                            singleMessage.fileType === "file" &&
                                             singleMessage.fileUrl !== "";
                                         return (
                                             <div
@@ -715,14 +720,19 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                                 }
                                             >
                                                 {isImage ? (
-                                                    // Image message: show the picture
                                                     <img
                                                         src={singleMessage.fileUrl}
                                                         alt={singleMessage.fileName || "image"}
-                                                        className="rounded-lg max-w-full max-h-64"
+                                                        className="rounded-lg max-w-full max-h-64 cursor-pointer"
                                                     />
+                                                ) : isFile ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-2xl">📄</span>
+                                                        <span className="text-sm underline cursor-pointer">
+                                                            {singleMessage.fileName || "File"}
+                                                        </span>
+                                                    </div>
                                                 ) : (
-                                                    // Text message: show the text
                                                     singleMessage.text
                                                 )}
                                             </div>
@@ -730,14 +740,20 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                     })
                                 )}
                             </div>
-                            {/* Staged image preview (shows before sending) */}
+                            {/* Staged file preview (shows before sending) */}
                             {pendingFileUrl !== "" && (
                                 <div className="border-t border-gray-200 px-3 pt-3 flex items-center gap-3">
-                                    <img
-                                        src={pendingFileUrl}
-                                        alt="preview"
-                                        className="w-16 h-16 object-cover rounded-lg border border-gray-200"
-                                    />
+                                    {pendingFileType === "image" ? (
+                                        <img
+                                            src={pendingFileUrl}
+                                            alt="preview"
+                                            className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                                        />
+                                    ) : (
+                                        <div className="w-16 h-16 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-2xl">
+                                            📄
+                                        </div>
+                                    )}
                                     <span className="text-sm text-gray-600 flex-1 truncate">
                                         {pendingFileName}
                                     </span>
@@ -745,6 +761,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                         onClick={() => {
                                             setPendingFileUrl("");
                                             setPendingFileName("");
+                                            setPendingFileType("");
                                         }}
                                         className="text-red-500 text-sm hover:underline"
                                     >
@@ -757,7 +774,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                 {/* Hidden file input, triggered by the button below */}
                                 <input
                                     type="file"
-                                    accept="image/*"
+                                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
                                     id="imageUpload"
                                     onChange={handleFileSelected}
                                     className="hidden"
