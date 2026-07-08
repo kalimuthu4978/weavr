@@ -9,6 +9,7 @@ import type { SearchResultMessage } from "../api/messages";
 import { fetchGroups, fetchGroupMessages } from "../api/groups";
 import type { Group } from "../api/groups";
 import CreateGroupPanel from "./CreateGroupPanel";
+import { uploadFile } from "../api/upload";
 
 
 type ChatMessage = {
@@ -16,8 +17,12 @@ type ChatMessage = {
     text: string;
     sender: string;
     receiver: string;
+    fileUrl?: string;    // optional - present only for image messages
+    fileName?: string;
     createdAt: string;
 };
+
+
 type GroupMessage = {
     _id: string;
     text: string;
@@ -52,6 +57,12 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
     // How many unread messages per user id, e.g. { "6a49f9...": 3 }
     // Unread message IDs per user id, e.g. { "6a49f9...": ["msgId1", "msgId2"] }
     const [unreadIds, setUnreadIds] = useState<Record<string, string[]>>({});
+
+    // An image that's been uploaded but not sent yet (staged for sending)
+    const [pendingFileUrl, setPendingFileUrl] = useState("");
+    const [pendingFileName, setPendingFileName] = useState("");
+
+    const [isUploading, setIsUploading] = useState(false);
 
     // The list of people I can chat with
     const [contacts, setContacts] = useState<ContactUser[]>([]);
@@ -237,18 +248,29 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
 
     // --- Send a message to the selected contact ---
     function handleSendMessage() {
-        if (message.trim() === "") {
+        if (selectedContact === null) {
             return;
         }
-        if (selectedContact === null) {
-            return; // nobody selected, nothing to do
+
+        const hasText = message.trim() !== "";
+        const hasImage = pendingFileUrl !== "";
+
+        // Nothing to send
+        if (!hasText && !hasImage) {
+            return;
         }
 
         socket.emit("sendMessage", {
             text: message,
             receiverId: selectedContact._id,
+            fileUrl: pendingFileUrl,   // "" if no image staged
+            fileName: pendingFileName,
         });
+
+        // Clear both the text and the staged image
         setMessage("");
+        setPendingFileUrl("");
+        setPendingFileName("");
     }
     // --- Send a message to the currently open group ---
     function handleSendGroupMessage() {
@@ -303,6 +325,29 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
             setSearchResults([]);
             setHasSearched(false);
         }
+    }
+    // Called when the user picks an image file to send
+    // Called when the user picks an image: upload it and stage it for sending
+    async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+        const files = event.target.files;
+        if (!files || files.length === 0) {
+            return;
+        }
+        const file = files[0];
+
+        setIsUploading(true);
+        try {
+            const uploadResult = await uploadFile(file);
+            // Hold the uploaded file - don't send yet
+            setPendingFileUrl(uploadResult.fileUrl);
+            setPendingFileName(uploadResult.fileName);
+        } catch (error) {
+            console.log("Could not upload image:", error);
+        }
+        setIsUploading(false);
+
+        // Reset the input so the same file can be re-picked later
+        event.target.value = "";
     }
     // Make a sorted copy of contacts: those with unread messages come first.
     // We copy the array first (with the spread) so we never mutate state directly.
@@ -656,6 +701,9 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                 ) : (
                                     filteredMessages.map((singleMessage) => {
                                         const isMine = singleMessage.sender === currentUser.id;
+                                        const isImage =
+                                            singleMessage.fileUrl &&
+                                            singleMessage.fileUrl !== "";
                                         return (
                                             <div
                                                 key={singleMessage._id}
@@ -666,15 +714,62 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                                         : "bg-purple-100 text-purple-900")
                                                 }
                                             >
-                                                {singleMessage.text}
+                                                {isImage ? (
+                                                    // Image message: show the picture
+                                                    <img
+                                                        src={singleMessage.fileUrl}
+                                                        alt={singleMessage.fileName || "image"}
+                                                        className="rounded-lg max-w-full max-h-64"
+                                                    />
+                                                ) : (
+                                                    // Text message: show the text
+                                                    singleMessage.text
+                                                )}
                                             </div>
                                         );
                                     })
                                 )}
                             </div>
-
+                            {/* Staged image preview (shows before sending) */}
+                            {pendingFileUrl !== "" && (
+                                <div className="border-t border-gray-200 px-3 pt-3 flex items-center gap-3">
+                                    <img
+                                        src={pendingFileUrl}
+                                        alt="preview"
+                                        className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                                    />
+                                    <span className="text-sm text-gray-600 flex-1 truncate">
+                                        {pendingFileName}
+                                    </span>
+                                    <button
+                                        onClick={() => {
+                                            setPendingFileUrl("");
+                                            setPendingFileName("");
+                                        }}
+                                        className="text-red-500 text-sm hover:underline"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            )}
                             {/* Input */}
-                            <div className="border-t border-gray-200 p-3 flex gap-2">
+                            <div className="border-t border-gray-200 p-3 flex gap-2 items-center">
+                                {/* Hidden file input, triggered by the button below */}
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    id="imageUpload"
+                                    onChange={handleFileSelected}
+                                    className="hidden"
+                                />
+                                <label
+                                    htmlFor="imageUpload"
+                                    className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-lg transition"
+                                    title="Send an image"
+                                >
+                                    📎
+                                </label>
+
                                 <input
                                     type="text"
                                     value={message}
@@ -684,7 +779,14 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
                                             handleSendMessage();
                                         }
                                     }}
-                                    placeholder={"Message " + selectedContact.username + "..."}
+                                    placeholder={
+                                        isUploading
+                                            ? "Uploading image..."
+                                            : pendingFileUrl !== ""
+                                                ? "Add a caption (optional) and hit Send"
+                                                : "Message " + selectedContact.username + "..."
+                                    }
+                                    disabled={isUploading}
                                     className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
                                 />
                                 <button
