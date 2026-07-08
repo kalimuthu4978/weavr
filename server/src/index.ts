@@ -104,29 +104,38 @@ io.on("connection", async (socket) => {
 
   // 2. When a client sends a message: save it, then broadcast it
   // Send a message to ONE specific user
-  socket.on("sendMessage", async (data) => {
+socket.on("sendMessage", async (data) => {
     try {
       const text = data.text;
       const receiverId = data.receiverId;
+      // These may be undefined for a plain text message - default to empty
+      const fileUrl = data.fileUrl || "";
+      const fileName = data.fileName || "";
 
-      // We need to know who is sending: it's the userId from this connection
       if (!userId) {
         console.log("Cannot send: this socket has no userId");
         return;
       }
 
-      // Save the message with sender + receiver
+      // A message must have EITHER text OR a file - reject truly empty ones
+      const hasText = text && text.trim() !== "";
+      const hasFile = fileUrl !== "";
+      if (!hasText && !hasFile) {
+        console.log("Blocked empty message (no text and no file)");
+        return;
+      }
+
+      // Save the message with whatever it carries
       const newMessage = new Message({
-        text: text,
+        text: text || "",
         sender: userId,
         receiver: receiverId,
+        fileUrl: fileUrl,
+        fileName: fileName,
       });
       await newMessage.save();
 
-      // Deliver to the receiver's room AND the sender's room.
-      // io.to(room).emit sends only to sockets in that room.
-      // Deliver to both people in ONE emit. If sender === receiver,
-      // Socket.io automatically de-duplicates, so no double-send.
+      // Deliver to both people (unchanged from before)
       io.to([receiverId, userId]).emit("receiveMessage", newMessage);
     } catch (error) {
       console.log("Error saving message:", error);

@@ -4,19 +4,28 @@ const messageSchema = new mongoose.Schema(
   {
     text: {
       type: String,
-      required: true,
+      required: false,   // <-- was true; an image-only message has no text
+      default: "",
     },
-    // The _id of the User who sent this message
     sender: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    // The _id of the User this message is for
     receiver: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+    },
+    // If this message is a file, its URL and original name live here.
+    // Empty string means "this is a plain text message."
+    fileUrl: {
+      type: String,
+      default: "",
+    },
+    fileName: {
+      type: String,
+      default: "",
     },
   },
   {
