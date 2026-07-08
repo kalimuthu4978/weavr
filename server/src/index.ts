@@ -21,7 +21,7 @@ dotenv.config();
 
 // Create the Express application
 const app = express();
-const port = process.env.PORT || 5000;;
+const port = process.env.PORT || 5000;
 
 // Let the server understand JSON in the request body
 app.use(express.json());
@@ -85,7 +85,7 @@ io.on("connection", async (socket) => {
   if (userId) {
     try {
       const myGroups = await Group.find({ members: userId });
-      myGroups.forEach((oneGroup) => {
+      myGroups.forEach((oneGroup: any) => {
         // Room name = the group's id (as a string)
         socket.join(oneGroup._id.toString());
       });
@@ -186,7 +186,7 @@ io.on("connection", async (socket) => {
         return;
       }
       const isMember = group.members.some(
-        (memberId) => memberId.toString() === userId,
+        (memberId: any) => memberId.toString() === userId,
       );
       if (!isMember) {
         console.log("Blocked: sender is not a member of this group");

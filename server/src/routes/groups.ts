@@ -81,7 +81,7 @@ router.get("/:groupId/messages", requireAuth, async (req, res) => {
     }
 
     const isMember = group.members.some(
-      (memberId) => memberId.toString() === currentUserId
+      (memberId: any) => memberId.toString() === currentUserId
     );
     if (!isMember) {
       return res
