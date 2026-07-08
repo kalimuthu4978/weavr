@@ -25,10 +25,26 @@ function fileFilter(
   file: Express.Multer.File,
   callback: multer.FileFilterCallback
 ) {
-  if (file.mimetype.startsWith("image/")) {
-    callback(null, true); // accept it
+  // Allow images and common document types
+  const allowedTypes = [
+    "image/",                                                        // any image
+    "application/pdf",                                               // PDF
+    "application/msword",                                            // .doc
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+    "application/vnd.ms-excel",                                      // .xls
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",        // .xlsx
+    "text/plain",                                                    // .txt
+  ];
+
+  // Accept if the file's type starts with or matches any allowed type
+  const isAllowed = allowedTypes.some((type) =>
+    file.mimetype.startsWith(type) || file.mimetype === type
+  );
+
+  if (isAllowed) {
+    callback(null, true);
   } else {
-    callback(null, false); // reject it (not an image)
+    callback(null, false);
   }
 }
 
@@ -37,7 +53,7 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5 MB
+    fileSize: 10 * 1024 * 1024, // 5 MB
   },
 });
 

@@ -104,13 +104,14 @@ io.on("connection", async (socket) => {
 
   // 2. When a client sends a message: save it, then broadcast it
   // Send a message to ONE specific user
-socket.on("sendMessage", async (data) => {
+  socket.on("sendMessage", async (data) => {
     try {
       const text = data.text;
       const receiverId = data.receiverId;
       // These may be undefined for a plain text message - default to empty
       const fileUrl = data.fileUrl || "";
       const fileName = data.fileName || "";
+      const fileType = data.fileType || "";
 
       if (!userId) {
         console.log("Cannot send: this socket has no userId");
@@ -132,6 +133,7 @@ socket.on("sendMessage", async (data) => {
         receiver: receiverId,
         fileUrl: fileUrl,
         fileName: fileName,
+        fileType: fileType, // <-- add this
       });
       await newMessage.save();
 
