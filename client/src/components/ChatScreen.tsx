@@ -34,9 +34,10 @@ type ChatScreenProps = {
     currentUser: StoredUser;
     onLogout: () => void;
     onProfileUpdated: (updatedUser: StoredUser) => void;
+    onOpenAdmin: () => void;
 };
 
-function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps) {
+function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: ChatScreenProps) {
     const [showProfile, setShowProfile] = useState(false);
     const [isConnected, setIsConnected] = useState(socket.connected);
     const [message, setMessage] = useState("");
@@ -324,6 +325,14 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated }: ChatScreenProps
 
     return (
         <div className="h-screen flex flex-col bg-gradient-to-br from-purple-600 to-blue-500 text-white overflow-hidden">
+            {currentUser.isAdmin && (
+                <button
+                    onClick={onOpenAdmin}
+                    className="bg-yellow-400 text-gray-900 hover:bg-yellow-300 text-sm font-semibold px-3 py-1 rounded-lg transition"
+                >
+                    Admin
+                </button>
+            )}
             {showProfile && (
                 <ProfilePanel
                     currentUser={currentUser}

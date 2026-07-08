@@ -4,6 +4,7 @@ import ChatScreen from "./components/ChatScreen";
 import { getStoredUser, clearSession } from "./auth/session";
 import type { StoredUser } from "./auth/session";
 import socket from "./socket";
+import AdminDashboard from "./components/AdminDashboard";
 
 function App() {
   // Start logged in if a user was already saved from a previous session.
@@ -11,6 +12,8 @@ function App() {
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(
     getStoredUser()
   );
+
+  const [showAdmin, setShowAdmin] = useState(false);
 
   // On first load, if we're already logged in, connect the socket.
   useEffect(() => {
@@ -48,14 +51,28 @@ function App() {
     return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
   }
 
+  if (currentUser === null) {
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
+  }
+
+  // Admins can open the dashboard
+  if (showAdmin && currentUser.isAdmin) {
+    return (
+      <AdminDashboard
+        currentUser={currentUser}
+        onBack={() => setShowAdmin(false)}
+      />
+    );
+  }
+
   return (
     <ChatScreen
       currentUser={currentUser}
       onLogout={handleLogout}
       onProfileUpdated={handleProfileUpdated}
+      onOpenAdmin={() => setShowAdmin(true)}
     />
   );
+
 }
-
-
 export default App;
