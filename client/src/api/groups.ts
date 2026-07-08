@@ -40,53 +40,40 @@ export type GroupMessageData = {
 
 // Load the message history for one group
 export async function fetchGroupMessages(
-  groupId: string,
+  groupId: string
 ): Promise<GroupMessageData[]> {
   const token = getToken();
 
   const response = await fetch(
-    `${API_BASE_URL}/api/groups/` + groupId + "/messages",
+    `${API_BASE_URL}/api/groups/${groupId}/messages`,   // <-- full path
     {
       method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
+      headers: { Authorization: `Bearer ${token}` },
+    }
   );
 
   const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to load group messages");
-  }
-
+  if (!response.ok) throw new Error(data.message || "Failed to load group messages");
   return data;
 }
 
 // Create a new group with a name and a list of member ids
 export async function createGroup(
   name: string,
-  memberIds: string[],
+  memberIds: string[]
 ): Promise<Group> {
   const token = getToken();
 
-  const response = await fetch("http://localhost:5000/api/groups", {
+  const response = await fetch(`${API_BASE_URL}/api/groups`, {   // <-- full path
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      name: name,
-      memberIds: memberIds,
-    }),
+    body: JSON.stringify({ name: name, memberIds: memberIds }),
   });
 
   const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to create group");
-  }
-
+  if (!response.ok) throw new Error(data.message || "Failed to create group");
   return data.group;
 }
