@@ -7,7 +7,7 @@ import authRoutes from "./routes/auth";
 import Message from "./models/Message";
 import User from "./models/User";
 import cors from "cors";
-import userRoutes from "./routes/Users";
+import userRoutes from "./routes/users";
 import messageRoutes from "./routes/messages";
 import groupRoutes from "./routes/groups";
 import Group from "./models/Group";
