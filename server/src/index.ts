@@ -7,7 +7,7 @@ import authRoutes from "./routes/auth";
 import Message from "./models/Message";
 import User from "./models/User";
 import cors from "cors";
-import userRoutes from "./routes/users";
+import userRoutes from "./routes/Users";
 import messageRoutes from "./routes/messages";
 import groupRoutes from "./routes/groups";
 import Group from "./models/Group";
@@ -27,7 +27,12 @@ const port = process.env.PORT || 5000;
 app.use(express.json());
 
 // Allow our React app (port 5173) to make HTTP requests to this server
-app.use(cors({ origin: "http://localhost:5173" }));
+// Allow both local development and the live Netlify frontend
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://weavr-chat.netlify.app",
+];
+app.use(cors({ origin: allowedOrigins }));
 
 app.use("/api/groups", groupRoutes);
 
@@ -60,7 +65,7 @@ const httpServer = http.createServer(app);
 // React client (which will run on port 5173) connect to us later.
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: allowedOrigins,
   },
 });
 
