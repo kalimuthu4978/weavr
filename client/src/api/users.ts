@@ -14,7 +14,7 @@ export type ContactUser = {
 export async function fetchUsers(): Promise<ContactUser[]> {
   const token = getToken();
 
-  const response = await fetch(API_BASE_URL, {
+  const response = await fetch(`${API_BASE_URL}/api/users`, {
     method: "GET",
     headers: {
       // Send the token so the protected route lets us in.
