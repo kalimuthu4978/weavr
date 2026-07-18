@@ -53,7 +53,8 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
     const [statusMap, setStatusMap] = useState<Record<string, string>>({});
     const [showCreateGroup, setShowCreateGroup] = useState(false);
     const [unreadIds, setUnreadIds] = useState<Record<string, string[]>>({});
-
+    // Unread group message IDs per group id, e.g. { "6a4b5d...": ["msgId1"] }
+    const [groupUnreadIds, setGroupUnreadIds] = useState<Record<string, string[]>>({});
     const [pendingFileUrl, setPendingFileUrl] = useState("");
     const [pendingFileName, setPendingFileName] = useState("");
     const [pendingFileType, setPendingFileType] = useState("");
@@ -115,10 +116,12 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
         }
         function onReceiveGroupMessage(newGroupMessage: GroupMessage) {
             setSelectedGroup((currentlyOpenGroup) => {
-                if (
+                const isForOpenGroup =
                     currentlyOpenGroup !== null &&
-                    currentlyOpenGroup._id === newGroupMessage.group
-                ) {
+                    currentlyOpenGroup._id === newGroupMessage.group;
+
+                if (isForOpenGroup) {
+                    // I'm viewing this group -> show the message
                     setGroupMessages((previous) => {
                         const alreadyExists = previous.some(
                             (existing) => existing._id === newGroupMessage._id
@@ -128,7 +131,28 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                         }
                         return [...previous, newGroupMessage];
                     });
+                } else {
+                    // Message is for a group I'm NOT viewing -> count it as unread.
+                    // Don't badge my own messages (they echo back to me).
+                    if (newGroupMessage.sender !== currentUser.id) {
+                        setGroupUnreadIds((previous) => {
+                            const existingIds = previous[newGroupMessage.group] || [];
+
+                            // Same idempotency guard: don't count the same message twice
+                            if (existingIds.includes(newGroupMessage._id)) {
+                                return previous;
+                            }
+
+                            const updated = { ...previous };
+                            updated[newGroupMessage.group] = [
+                                ...existingIds,
+                                newGroupMessage._id,
+                            ];
+                            return updated;
+                        });
+                    }
                 }
+
                 return currentlyOpenGroup;
             });
         }
@@ -211,6 +235,14 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
         setSelectedGroup(group);
         setGroupMessages([]);
         setSearchTerm("");
+
+        // Clear the unread badge for this group - we're reading them now
+        setGroupUnreadIds((previous) => {
+            const updated = { ...previous };
+            updated[group._id] = [];
+            return updated;
+        });
+
         try {
             const history = await fetchGroupMessages(group._id);
             setGroupMessages(history);
@@ -218,7 +250,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
             console.log("Could not load group messages:", error);
         }
     }
-
     function handleSendMessage() {
         if (selectedContact === null) {
             return;
@@ -515,22 +546,36 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                         No groups yet.
                                     </p>
                                 ) : (
-                                    groups.map((oneGroup) => (
-                                        <button
-                                            key={oneGroup._id}
-                                            onClick={() => handleSelectGroup(oneGroup)}
-                                            className="w-full text-left px-4 py-3 hover:bg-purple-50 transition flex items-center gap-2"
-                                        >
-                                            <span className="w-6 h-6 rounded-full bg-purple-200 text-purple-700 text-xs font-bold flex items-center justify-center">
-                                                {oneGroup.name
-                                                    ? oneGroup.name.charAt(0).toUpperCase()
-                                                    : "?"}
-                                            </span>
-                                            <span className="flex-1">
-                                                {oneGroup.name || "Unnamed group"}
-                                            </span>
-                                        </button>
-                                    ))
+groups.map((oneGroup) => {
+                                        const unreadCount = groupUnreadIds[oneGroup._id]
+                                            ? groupUnreadIds[oneGroup._id].length
+                                            : 0;
+                                        return (
+                                            <button
+                                                key={oneGroup._id}
+                                                onClick={() => handleSelectGroup(oneGroup)}
+                                                className="w-full text-left px-4 py-3 hover:bg-purple-50 transition flex items-center gap-2"
+                                            >
+                                                <span className="w-6 h-6 rounded-full bg-purple-200 text-purple-700 text-xs font-bold flex items-center justify-center">
+                                                    {oneGroup.name
+                                                        ? oneGroup.name.charAt(0).toUpperCase()
+                                                        : "?"}
+                                                </span>
+                                                <span
+                                                    className={
+                                                        "flex-1 " + (unreadCount > 0 ? "font-bold" : "")
+                                                    }
+                                                >
+                                                    {oneGroup.name || "Unnamed group"}
+                                                </span>
+                                                {unreadCount > 0 && (
+                                                    <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                                                        {unreadCount}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })
                                 )}
                             </div>
                             <div className="px-4 py-3 border-b border-gray-200 font-semibold text-purple-700">
@@ -541,7 +586,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                     <p className="text-gray-400 text-sm text-center mt-4 px-2">
                                         No other users yet. Sign up a second account to chat.
                                     </p>
-                                ) :  (
+                                ) : (
                                     sortedContacts.map((contact) => {
                                         const isSelected =
                                             selectedContact !== null &&
@@ -583,10 +628,10 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                             </button>
                                         );
                                     })
-                                ) }
+                                )}
                             </div>
                         </>
-                    ) }
+                    )}
                 </div>
 
                 {/* Conversation panel */}
