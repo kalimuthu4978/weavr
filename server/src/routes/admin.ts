@@ -1,5 +1,5 @@
 import express from "express";
-import User from "../models/user";
+import User from "../models/User";
 import Group from "../models/Group";
 import Message from "../models/Message";
 import GroupMessage from "../models/GroupMessage";
