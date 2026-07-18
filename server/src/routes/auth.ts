@@ -58,20 +58,27 @@ router.post("/register", async (req, res) => {
 // POST /api/auth/login  ->  sign in and receive a token
 router.post("/login", async (req, res) => {
   try {
-    const email = req.body.email;
+    // Accept either an email or a username in one field
+    const identifier = req.body.identifier;
     const password = req.body.password;
 
-    // 1. Make sure both fields were sent
-    if (!email || !password) {
+    if (!identifier || !password) {
       return res
         .status(400)
-        .json({ message: "Please provide email and password" });
+        .json({ message: "Please provide your email/username and password" });
     }
 
-    // 2. Find the user by their email
-    const user = await User.findOne({ email: email });
+    // Find the user by EITHER email OR username.
+    // Email is stored lowercase, so lowercase the identifier for the email match.
+    const user = await User.findOne({
+      $or: [
+        { email: identifier.toLowerCase() },
+        { username: identifier },
+      ],
+    });
+
     if (!user) {
-      return res.status(400).json({ message: "Invalid email or password" });
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
     // 3. Compare the typed password against the stored hash
@@ -93,15 +100,6 @@ router.post("/login", async (req, res) => {
     });
 
     // 6. Send back the token and basic user info
-    res.status(200).json({
-      message: "Logged in successfully",
-      token: token,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-      },
-    });
     res.status(200).json({
       message: "Logged in successfully",
       token: token,
