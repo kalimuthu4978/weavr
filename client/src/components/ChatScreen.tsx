@@ -55,6 +55,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
     const [unreadIds, setUnreadIds] = useState<Record<string, string[]>>({});
     // Unread group message IDs per group id, e.g. { "6a4b5d...": ["msgId1"] }
     const [groupUnreadIds, setGroupUnreadIds] = useState<Record<string, string[]>>({});
+    const [groupSearchTerm, setGroupSearchTerm] = useState("");
     const [pendingFileUrl, setPendingFileUrl] = useState("");
     const [pendingFileName, setPendingFileName] = useState("");
     const [pendingFileType, setPendingFileType] = useState("");
@@ -221,6 +222,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
         setSelectedContact(contact);
         setMessages([]);
         setSearchTerm("");
+        setGroupSearchTerm("");
         socket.emit("getConversation", contact._id);
 
         setUnreadIds((previous) => {
@@ -235,6 +237,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
         setSelectedGroup(group);
         setGroupMessages([]);
         setSearchTerm("");
+        setGroupSearchTerm("");
 
         // Clear the unread badge for this group - we're reading them now
         setGroupUnreadIds((previous) => {
@@ -353,7 +356,14 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
             : messages.filter((oneMessage) =>
                 oneMessage.text.toLowerCase().includes(searchTermLower)
             );
-
+    // Filter the open group conversation by its search term (case-insensitive)
+    const groupSearchTermLower = groupSearchTerm.trim().toLowerCase();
+    const filteredGroupMessages =
+        groupSearchTermLower === ""
+            ? groupMessages
+            : groupMessages.filter((oneMessage) =>
+                oneMessage.text.toLowerCase().includes(groupSearchTermLower)
+            );
     return (
         <div className="h-screen flex flex-col bg-gradient-to-br from-purple-600 to-blue-500 text-white overflow-hidden">
             {currentUser.isAdmin && (
@@ -546,7 +556,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                         No groups yet.
                                     </p>
                                 ) : (
-groups.map((oneGroup) => {
+                                    groups.map((oneGroup) => {
                                         const unreadCount = groupUnreadIds[oneGroup._id]
                                             ? groupUnreadIds[oneGroup._id].length
                                             : 0;
@@ -642,22 +652,39 @@ groups.map((oneGroup) => {
                         </div>
                     ) : selectedGroup !== null ? (
                         <>
-                            <div className="px-4 py-3 border-b border-gray-200">
-                                <div className="font-semibold text-purple-700">
-                                    {selectedGroup.name}
+                            {/* Group header: info left, search right */}
+                            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-4">
+                                <div>
+                                    <div className="font-semibold text-purple-700">
+                                        {selectedGroup.name}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                        {selectedGroup.members.length} members
+                                    </div>
                                 </div>
-                                <div className="text-xs text-gray-500">
-                                    {selectedGroup.members.length} members
-                                </div>
+
+                                {/* Search within this group */}
+                                <input
+                                    type="text"
+                                    value={groupSearchTerm}
+                                    onChange={(e) => setGroupSearchTerm(e.target.value)}
+                                    placeholder="Search messages..."
+                                    className="w-56 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                                />
                             </div>
 
+                            {/* Group messages */}
                             <div className="flex-1 overflow-y-auto p-4 space-y-2">
                                 {groupMessages.length === 0 ? (
                                     <p className="text-gray-400 text-center mt-4">
                                         No messages yet. Start the conversation!
                                     </p>
+                                ) : filteredGroupMessages.length === 0 ? (
+                                    <p className="text-gray-400 text-center mt-4">
+                                        No messages match "{groupSearchTerm}"
+                                    </p>
                                 ) : (
-                                    groupMessages.map((oneMessage) => {
+                                    filteredGroupMessages.map((oneMessage) => {
                                         const isMine = oneMessage.sender === currentUser.id;
                                         return (
                                             <div
