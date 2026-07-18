@@ -1,5 +1,5 @@
 import express from "express";
-import User from "../models/User";
+import User from "../models/user";
 import requireAuth from "../middleware/auth";
 
 const router = express.Router();
