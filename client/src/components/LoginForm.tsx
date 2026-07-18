@@ -9,20 +9,20 @@ type LoginFormProps = {
 };
 
 function LoginForm({ onLoginSuccess }: LoginFormProps) {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [feedback, setFeedback] = useState("");
 
   async function handleLogin() {
     setFeedback("");
 
-    if (email === "" || password === "") {
+    if (identifier === "" || password === "") {
       setFeedback("Please fill in all fields");
       return;
     }
 
     try {
-      const data = await loginUser(email, password);
+      const data = await loginUser(identifier, password);
       saveSession(data.token, data.user);
 
       // Tell App we're logged in - App will switch to the chat screen
@@ -43,10 +43,10 @@ function LoginForm({ onLoginSuccess }: LoginFormProps) {
       </h2>
 
       <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email"
+        type="text"
+        value={identifier}
+        onChange={(e) => setIdentifier(e.target.value)}
+        placeholder="Email or username"
         className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 focus:outline-none focus:border-purple-500"
       />
 

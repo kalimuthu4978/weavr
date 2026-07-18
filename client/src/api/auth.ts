@@ -34,14 +34,14 @@ export async function registerUser(
 }
 
 // Sends login details; returns { message, token, user } on success
-export async function loginUser(email: string, password: string) {
+export async function loginUser(identifier: string, password: string) {
   const response = await fetch(`${API_URL}/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      email: email,
+      identifier: identifier,
       password: password,
     }),
   });
