@@ -8,6 +8,17 @@ A full-stack, real-time chat application built with the MERN stack, TypeScript, 
 
 **[Live App](https://weavr-chat.netlify.app)** · [Frontend on Netlify](https://weavr-chat.netlify.app) · [Backend on Render](https://weavr-backend.onrender.com)
 
+## Demo Credentials
+
+Try the live app with this demo account:
+
+- **Username:** `demo` / 'demo2'
+- **Password:** `demo1234`
+
+> The backend is on a free tier and sleeps after inactivity — the first login may take 30–60 seconds while the server wakes up. Just wait and try again if the first attempt is slow.
+
+To see real-time features, open the app in two browser windows (one incognito) and log in as two different accounts.
+
 </div>
 
 ---
