@@ -9,9 +9,21 @@ export function registerGroupHandlers(io: Server, socket: Socket, userId: string
     try {
       const text = data.text;
       const groupId = data.groupId;
+      // These may be undefined for a plain text message - default to empty
+      const fileUrl = data.fileUrl || "";
+      const fileName = data.fileName || "";
+      const fileType = data.fileType || "";
 
       if (!userId) {
         console.log("Cannot send group message: no userId on socket");
+        return;
+      }
+
+      // A message must have EITHER text OR a file - reject truly empty ones
+      const hasText = text && text.trim() !== "";
+      const hasFile = fileUrl !== "";
+      if (!hasText && !hasFile) {
+        console.log("Blocked empty group message (no text and no file)");
         return;
       }
 
@@ -28,11 +40,14 @@ export function registerGroupHandlers(io: Server, socket: Socket, userId: string
         return;
       }
 
-      // Save the group message
+      // Save the group message with whatever it carries
       const newGroupMessage = new GroupMessage({
-        text: text,
+        text: text || "",
         sender: userId,
         group: groupId,
+        fileUrl: fileUrl,
+        fileName: fileName,
+        fileType: fileType,
       });
       await newGroupMessage.save();
 

@@ -15,11 +15,26 @@ const groupSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
-    // Who created the group (also a member)
+    // Who created the group (also a member, and always an admin)
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+    },
+    // Members who are allowed to manage the group: add/remove members,
+    // rename it, change its picture, promote other members to admin.
+    // The creator is put in here when the group is created.
+    groupAdmins: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    // Cloudinary URL of the group's picture. Empty string means "no picture",
+    // and the UI falls back to showing the first letter of the group name.
+    groupPicture: {
+      type: String,
+      default: "",
     },
   },
   {

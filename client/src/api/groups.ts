@@ -7,6 +7,27 @@ export type Group = {
   name: string;
   members: string[];
   createdBy: string;
+  // Members allowed to manage the group. Older groups saved before this
+  // field existed may not have it, so it's optional.
+  groupAdmins?: string[];
+  groupPicture?: string;
+};
+
+// The same group, but from GET /api/groups/:groupId where the member ids
+// have been swapped for the full user details.
+export type GroupWithMembers = {
+  _id: string;
+  name: string;
+  members: {
+    _id: string;
+    username: string;
+    email: string;
+    profilePicture?: string;
+    status?: string;
+  }[];
+  createdBy: string;
+  groupAdmins?: string[];
+  groupPicture?: string;
 };
 
 // Fetch all groups the logged-in user belongs to
@@ -36,6 +57,10 @@ export type GroupMessageData = {
   sender: string;
   group: string;
   createdAt: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileType?: string; // "image" | "video" | "file" | ""
+  isHidden?: boolean;
 };
 
 // Load the message history for one group
@@ -75,5 +100,101 @@ export async function createGroup(
 
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || "Failed to create group");
+  return data.group;
+}
+
+// --- Group management (group admins only, enforced on the server) ---
+
+// A small helper so the functions below don't all repeat the same fetch setup.
+async function sendGroupRequest(
+  path: string,
+  method: string,
+  body?: object
+): Promise<any> {
+  const token = getToken();
+
+  const response = await fetch(`${API_BASE_URL}/api/groups${path}`, {
+    method: method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    // Only send a body when there is one (GET and DELETE usually have none)
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Request failed");
+  }
+  return data;
+}
+
+// Load one group with its members' names and pictures filled in
+export async function fetchGroupDetails(
+  groupId: string
+): Promise<GroupWithMembers> {
+  return await sendGroupRequest(`/${groupId}`, "GET");
+}
+
+// Rename a group and/or change its picture
+export async function updateGroup(
+  groupId: string,
+  name: string,
+  groupPicture: string
+): Promise<Group> {
+  const data = await sendGroupRequest(`/${groupId}`, "PUT", {
+    name: name,
+    groupPicture: groupPicture,
+  });
+  return data.group;
+}
+
+// Add one or more people to a group
+export async function addGroupMembers(
+  groupId: string,
+  memberIds: string[]
+): Promise<Group> {
+  const data = await sendGroupRequest(`/${groupId}/members`, "POST", {
+    memberIds: memberIds,
+  });
+  return data.group;
+}
+
+// Remove one person from a group (or leave it yourself)
+export async function removeGroupMember(
+  groupId: string,
+  memberId: string
+): Promise<Group> {
+  const data = await sendGroupRequest(
+    `/${groupId}/members/${memberId}`,
+    "DELETE"
+  );
+  return data.group;
+}
+
+// Make an existing member a group admin
+export async function promoteToGroupAdmin(
+  groupId: string,
+  memberId: string
+): Promise<Group> {
+  const data = await sendGroupRequest(`/${groupId}/admins/${memberId}`, "POST");
+  return data.group;
+}
+
+// Delete a whole group and its messages. Only the creator may do this.
+export async function deleteGroup(groupId: string) {
+  return await sendGroupRequest(`/${groupId}`, "DELETE");
+}
+
+// Take group admin rights away again
+export async function demoteFromGroupAdmin(
+  groupId: string,
+  memberId: string
+): Promise<Group> {
+  const data = await sendGroupRequest(
+    `/${groupId}/admins/${memberId}`,
+    "DELETE"
+  );
   return data.group;
 }
