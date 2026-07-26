@@ -22,6 +22,7 @@ import type {
 } from "../api/admin";
 import Avatar from "./Avatar";
 import AnalyticsPanel from "./AnalyticsPanel";
+import AdminGroupPanel from "./AdminGroupPanel";
 
 type AdminDashboardProps = {
   currentUser: StoredUser;
@@ -36,6 +37,8 @@ function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
   const [analytics, setAnalytics] = useState<AnalyticsReport | null>(null);
   // How many days the message volume chart covers
   const [analyticsRange, setAnalyticsRange] = useState(14);
+  // Which group's membership panel is open, or null for none
+  const [managingGroupId, setManagingGroupId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
 
   // Load everything when the dashboard opens
@@ -149,6 +152,15 @@ function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-500 text-white p-6">
+      {managingGroupId !== null && (
+        <AdminGroupPanel
+          groupId={managingGroupId}
+          allUsers={users}
+          onClose={() => setManagingGroupId(null)}
+          onGroupChanged={loadAll}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -310,6 +322,12 @@ function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
                     </div>
                   </div>
                   <div className="flex gap-3 shrink-0">
+                    <button
+                      onClick={() => setManagingGroupId(oneGroup._id)}
+                      className="text-sm text-purple-600 hover:underline"
+                    >
+                      Members
+                    </button>
                     <button
                       onClick={() => handleRenameGroup(oneGroup)}
                       className="text-sm text-purple-600 hover:underline"

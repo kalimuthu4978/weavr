@@ -222,6 +222,161 @@ router.put("/groups/:groupId", async (req, res) => {
   }
 });
 
+// GET /api/admin/groups/:groupId  ->  one group with its members' details,
+// so the dashboard can manage who is in it. Unlike the user-facing version
+// of this route, an admin doesn't have to be a member.
+router.get("/groups/:groupId", async (req, res) => {
+  try {
+    const groupId = String(req.params.groupId);
+
+    const group = await Group.findById(groupId).populate(
+      "members",
+      "username email profilePicture status"
+    );
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    res.status(200).json(group);
+  } catch (error) {
+    console.log("Error loading group as admin:", error);
+    res.status(500).json({ message: "Something went wrong" });
+  }
+});
+
+// POST /api/admin/groups/:groupId/members  ->  add people to any group.
+// Body: { memberIds: ["...", "..."] }
+router.post("/groups/:groupId/members", async (req, res) => {
+  try {
+    const groupId = String(req.params.groupId);
+    const memberIds = req.body.memberIds;
+
+    if (!Array.isArray(memberIds) || memberIds.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "Please choose at least one person to add" });
+    }
+
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    // Add each id, skipping anyone already in the group
+    let addedCount = 0;
+    for (const oneMemberId of memberIds) {
+      const alreadyIn = group.members.some(
+        (existingId: any) => existingId.toString() === oneMemberId
+      );
+      if (!alreadyIn) {
+        group.members.push(oneMemberId);
+        addedCount = addedCount + 1;
+      }
+    }
+
+    if (addedCount === 0) {
+      return res
+        .status(400)
+        .json({ message: "Those people are already in the group" });
+    }
+
+    await group.save();
+    res.status(200).json({ message: "Members added", group: group });
+  } catch (error) {
+    console.log("Error adding members as admin:", error);
+    res.status(500).json({ message: "Something went wrong" });
+  }
+});
+
+// DELETE /api/admin/groups/:groupId/members/:memberId  ->  remove anyone
+// from any group. The creator is protected, since removing them would leave
+// the group without its guaranteed manager.
+router.delete("/groups/:groupId/members/:memberId", async (req, res) => {
+  try {
+    const groupId = String(req.params.groupId);
+    const memberIdToRemove = String(req.params.memberId);
+
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    if (group.createdBy.toString() === memberIdToRemove) {
+      return res.status(400).json({
+        message: "The group creator cannot be removed - delete the group instead",
+      });
+    }
+
+    group.members = group.members.filter(
+      (oneId: any) => oneId.toString() !== memberIdToRemove
+    );
+    group.groupAdmins = group.groupAdmins.filter(
+      (oneId: any) => oneId.toString() !== memberIdToRemove
+    );
+
+    await group.save();
+    res.status(200).json({ message: "Member removed", group: group });
+  } catch (error) {
+    console.log("Error removing member as admin:", error);
+    res.status(500).json({ message: "Something went wrong" });
+  }
+});
+
+// PATCH /api/admin/groups/:groupId/permissions/:memberId
+// Grants or revokes group-admin rights. Body: { isGroupAdmin: true|false }
+router.patch("/groups/:groupId/permissions/:memberId", async (req, res) => {
+  try {
+    const groupId = String(req.params.groupId);
+    const memberId = String(req.params.memberId);
+    const shouldBeGroupAdmin = req.body.isGroupAdmin;
+
+    if (typeof shouldBeGroupAdmin !== "boolean") {
+      return res
+        .status(400)
+        .json({ message: "isGroupAdmin must be true or false" });
+    }
+
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    const isMember = group.members.some(
+      (oneId: any) => oneId.toString() === memberId
+    );
+    if (!isMember) {
+      return res
+        .status(400)
+        .json({ message: "That person must be a member of the group first" });
+    }
+
+    if (shouldBeGroupAdmin) {
+      const alreadyAdmin = group.groupAdmins.some(
+        (oneId: any) => oneId.toString() === memberId
+      );
+      if (!alreadyAdmin) {
+        group.groupAdmins.push(memberId as any);
+      }
+    } else {
+      // The creator keeps their rights permanently
+      if (group.createdBy.toString() === memberId) {
+        return res
+          .status(400)
+          .json({ message: "The group creator cannot be demoted" });
+      }
+      group.groupAdmins = group.groupAdmins.filter(
+        (oneId: any) => oneId.toString() !== memberId
+      );
+    }
+
+    await group.save();
+    res.status(200).json({ message: "Permissions updated", group: group });
+  } catch (error) {
+    console.log("Error changing group permissions:", error);
+    res.status(500).json({ message: "Something went wrong" });
+  }
+});
+
 // DELETE /api/admin/groups/:groupId  ->  delete a group AND its messages
 router.delete("/groups/:groupId", async (req, res) => {
   try {

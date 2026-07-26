@@ -180,6 +180,65 @@ export async function adminDeleteGroup(groupId: string) {
   return await sendAdminJson(`/groups/${groupId}`, "DELETE");
 }
 
+// One group with its members' details filled in, for the management panel
+export type AdminGroupDetail = {
+  _id: string;
+  name: string;
+  members: {
+    _id: string;
+    username: string;
+    email: string;
+    profilePicture?: string;
+    status?: string;
+  }[];
+  createdBy: string;
+  groupAdmins?: string[];
+  groupPicture?: string;
+};
+
+export async function adminFetchGroupDetail(
+  groupId: string
+): Promise<AdminGroupDetail> {
+  const response = await fetch(`${ADMIN_URL}/groups/${groupId}`, {
+    headers: authHeader(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to load group");
+  return data;
+}
+
+export async function adminAddGroupMembers(
+  groupId: string,
+  memberIds: string[]
+) {
+  return await sendAdminJson(`/groups/${groupId}/members`, "POST", {
+    memberIds: memberIds,
+  });
+}
+
+export async function adminRemoveGroupMember(
+  groupId: string,
+  memberId: string
+) {
+  return await sendAdminJson(
+    `/groups/${groupId}/members/${memberId}`,
+    "DELETE"
+  );
+}
+
+// Grant or revoke group-admin rights for one member
+export async function adminSetGroupPermission(
+  groupId: string,
+  memberId: string,
+  isGroupAdmin: boolean
+) {
+  return await sendAdminJson(
+    `/groups/${groupId}/permissions/${memberId}`,
+    "PATCH",
+    { isGroupAdmin: isGroupAdmin }
+  );
+}
+
 // --- Content moderation ---
 
 // Every message a user has reported, newest first
