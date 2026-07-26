@@ -87,6 +87,14 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
+    // An admin can deactivate an account. Older accounts created before this
+    // field existed have isActive === undefined, which we treat as active.
+    if (user.isActive === false) {
+      return res.status(403).json({
+        message: "This account has been deactivated. Please contact an admin.",
+      });
+    }
+
     // 4. Read the secret used to sign tokens
     const secret = process.env.JWT_SECRET;
     if (!secret) {
@@ -107,7 +115,10 @@ router.post("/login", async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
-        isAdmin: user.isAdmin, // <-- add this
+        isAdmin: user.isAdmin,
+        // Sent so the UI can show the avatar and status line straight after login
+        profilePicture: user.profilePicture,
+        statusMessage: user.statusMessage,
       }
     });
   } catch (error) {

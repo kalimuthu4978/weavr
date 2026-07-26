@@ -29,8 +29,25 @@ const messageSchema = new mongoose.Schema(
     },
     fileType: {
       type: String,
-      default: "",   // "image", "file", or "" for text messages
-    }
+      default: "",   // "image", "video", "file", or "" for text messages
+    },
+    // --- Content moderation ---
+    // Any user can flag a message. Flagged messages show up in the admin
+    // dashboard for review; an admin then either clears the flag or hides it.
+    isFlagged: {
+      type: Boolean,
+      default: false,
+    },
+    flagReason: {
+      type: String,
+      default: "",
+    },
+    // Hidden messages stay in the database (so there is an audit trail) but
+    // are replaced with a placeholder in the chat UI.
+    isHidden: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

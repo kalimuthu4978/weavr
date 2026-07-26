@@ -1,5 +1,6 @@
 import { Server, Socket } from "socket.io";
 import Message from "../models/Message";
+import { stripHiddenMessages } from "../utils/moderation";
 
 // Registers all one-on-one message listeners for a connected socket.
 export function registerMessageHandlers(io: Server, socket: Socket, userId: string) {
@@ -62,7 +63,7 @@ export function registerMessageHandlers(io: Server, socket: Socket, userId: stri
         ],
       }).sort({ createdAt: 1 });
 
-      socket.emit("loadMessages", conversation);
+      socket.emit("loadMessages", stripHiddenMessages(conversation));
     } catch (error) {
       console.log("Error loading conversation:", error);
     }
@@ -73,7 +74,7 @@ export function registerMessageHandlers(io: Server, socket: Socket, userId: stri
 async function loadInitialMessages(socket: Socket) {
   try {
     const pastMessages = await Message.find().sort({ createdAt: 1 });
-    socket.emit("loadMessages", pastMessages);
+    socket.emit("loadMessages", stripHiddenMessages(pastMessages));
   } catch (error) {
     console.log("Error loading past messages:", error);
   }

@@ -37,6 +37,12 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Admins can deactivate an account instead of deleting it. A deactivated
+    // user keeps all their data but cannot log in.
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true, // auto adds createdat and updatedAt fields
