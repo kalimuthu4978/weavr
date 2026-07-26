@@ -13,6 +13,7 @@ import GroupSettingsPanel from "./GroupSettingsPanel";
 import PendingFilesStrip from "./PendingFilesStrip";
 import MessageContent from "./MessageContent";
 import MentionPicker from "./MentionPicker";
+import UserProfilePanel from "./UserProfilePanel";
 import { getMentionBeingTyped, completeMention } from "../utils/mentions";
 import Avatar from "./Avatar";
 import { uploadManyFiles } from "../api/upload";
@@ -84,6 +85,8 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
     });
     const [showSearchFilters, setShowSearchFilters] = useState(false);
     const [showGroupSettings, setShowGroupSettings] = useState(false);
+    // Whose profile to show, or null for none
+    const [profileUserId, setProfileUserId] = useState<string | null>(null);
     const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
     const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
     const [groupMessageText, setGroupMessageText] = useState("");
@@ -713,6 +716,13 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                 />
             )}
 
+            {profileUserId !== null && (
+                <UserProfilePanel
+                    userId={profileUserId}
+                    onClose={() => setProfileUserId(null)}
+                />
+            )}
+
             {showGroupSettings && selectedGroup !== null && (
                 <GroupSettingsPanel
                     groupId={selectedGroup._id}
@@ -1215,7 +1225,13 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                 {/* Only label other people's messages -
                                                     my own are already on the right. */}
                                                 {!isMine && (
-                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                    <button
+                                                        onClick={() =>
+                                                            setProfileUserId(oneMessage.sender)
+                                                        }
+                                                        title={"View " + senderName + "'s profile"}
+                                                        className="flex items-center gap-1.5 mb-1 hover:opacity-80 transition"
+                                                    >
                                                         <Avatar
                                                             imageUrl={senderContact?.profilePicture}
                                                             name={senderName}
@@ -1224,7 +1240,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                         <span className="text-xs font-semibold text-purple-700">
                                                             {senderName}
                                                         </span>
-                                                    </div>
+                                                    </button>
                                                 )}
 
                                                 <MessageContent
@@ -1319,7 +1335,12 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                     ) : selectedContact !== null ? (
                         <>
                             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-3 min-w-0">
+                                {/* The whole block opens this person's profile */}
+                                <button
+                                    onClick={() => setProfileUserId(selectedContact._id)}
+                                    title="View profile"
+                                    className="flex items-center gap-3 min-w-0 text-left hover:opacity-80 transition"
+                                >
                                     <Avatar
                                         imageUrl={selectedContact.profilePicture}
                                         name={selectedContact.username}
@@ -1335,7 +1356,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                 </div>
                                             )}
                                     </div>
-                                </div>
+                                </button>
 
                                 <input
                                     type="text"

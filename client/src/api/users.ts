@@ -11,6 +11,45 @@ export type ContactUser = {
   profilePicture?: string;  // Cloudinary URL; empty means "no picture"
 };
 
+// Another user's public profile, including a summary of their activity
+export type PublicProfile = {
+  _id: string;
+  username: string;
+  email: string;
+  status: string;
+  statusMessage: string;
+  profilePicture: string;
+  joinedAt: string;
+  recentActivity: {
+    lastMessageAt: string | null;
+    messagesSent: number;
+    groupsJoined: number;
+  };
+};
+
+// Load one user's public profile
+export async function fetchUserProfile(
+  userId: string
+): Promise<PublicProfile> {
+  const token = getToken();
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/users/${userId}/profile`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to load profile");
+  }
+
+  return data;
+}
+
 // Fetch every other user (the backend excludes the logged-in one)
 export async function fetchUsers(): Promise<ContactUser[]> {
   const token = getToken();
