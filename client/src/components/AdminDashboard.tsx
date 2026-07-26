@@ -183,31 +183,31 @@ function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-        <div className="bg-white text-gray-800 rounded-xl p-4 shadow">
+        <div className="bg-white text-gray-800 rounded-2xl p-4 shadow">
           <div className="text-3xl font-bold text-purple-700">
             {stats ? stats.users : "-"}
           </div>
           <div className="text-sm text-gray-500">Users</div>
         </div>
-        <div className="bg-white text-gray-800 rounded-xl p-4 shadow">
+        <div className="bg-white text-gray-800 rounded-2xl p-4 shadow">
           <div className="text-3xl font-bold text-purple-700">
             {stats ? stats.groups : "-"}
           </div>
           <div className="text-sm text-gray-500">Groups</div>
         </div>
-        <div className="bg-white text-gray-800 rounded-xl p-4 shadow">
+        <div className="bg-white text-gray-800 rounded-2xl p-4 shadow">
           <div className="text-3xl font-bold text-purple-700">
             {stats ? stats.directMessages : "-"}
           </div>
           <div className="text-sm text-gray-500">Direct messages</div>
         </div>
-        <div className="bg-white text-gray-800 rounded-xl p-4 shadow">
+        <div className="bg-white text-gray-800 rounded-2xl p-4 shadow">
           <div className="text-3xl font-bold text-purple-700">
             {stats ? stats.groupMessages : "-"}
           </div>
           <div className="text-sm text-gray-500">Group messages</div>
         </div>
-        <div className="bg-white text-gray-800 rounded-xl p-4 shadow">
+        <div className="bg-white text-gray-800 rounded-2xl p-4 shadow">
           <div
             className={
               "text-3xl font-bold " +
@@ -232,7 +232,7 @@ function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
       {/* Two columns: users and groups */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Users */}
-        <div className="bg-white text-gray-800 rounded-xl shadow overflow-hidden">
+        <div className="bg-white text-gray-800 rounded-2xl shadow overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-200 font-semibold text-purple-700">
             All Users ({users.length})
           </div>
@@ -295,7 +295,7 @@ function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
         </div>
 
         {/* Groups */}
-        <div className="bg-white text-gray-800 rounded-xl shadow overflow-hidden">
+        <div className="bg-white text-gray-800 rounded-2xl shadow overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-200 font-semibold text-purple-700">
             All Groups ({groups.length})
           </div>
@@ -349,7 +349,7 @@ function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
       </div>
 
       {/* Reported messages, full width because each row needs the space */}
-      <div className="bg-white text-gray-800 rounded-xl shadow overflow-hidden">
+      <div className="bg-white text-gray-800 rounded-2xl shadow overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200 font-semibold text-purple-700">
           Reported Messages ({flagged.length})
         </div>

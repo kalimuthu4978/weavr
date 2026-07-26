@@ -16,6 +16,7 @@ import MentionPicker from "./MentionPicker";
 import UserProfilePanel from "./UserProfilePanel";
 import DiscoverGroupsPanel from "./DiscoverGroupsPanel";
 import { getMentionBeingTyped, completeMention } from "../utils/mentions";
+import { toClockTime, toDayLabel, isSameDay } from "../utils/time";
 import Avatar from "./Avatar";
 import { uploadManyFiles } from "../api/upload";
 import {
@@ -783,11 +784,11 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
 
             {openFile !== null && (
                 <div
-                    className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+                    className="modal-backdrop fixed inset-0 flex items-center justify-center z-50 p-4"
                     onClick={() => setOpenFile(null)}
                 >
                     <div
-                        className="bg-white text-gray-800 rounded-xl shadow-xl max-w-lg w-full p-5"
+                        className="panel-in modal-card bg-white text-gray-800 rounded-2xl shadow-xl max-w-lg w-full p-5"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-4">
@@ -836,46 +837,60 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
             )}
 
             {/* Top bar */}
-            <div className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center gap-3">
-                    <img src="/logo.png" alt="Weavr logo" className="w-9 h-9" />
-                    <span className="text-xl font-bold">Weavr</span>
+            <div className="top-bar flex items-center justify-between px-6 py-3">
+                <div className="flex items-center gap-2.5">
+                    <img src="/logo.png" alt="Weavr logo" className="w-8 h-8" />
+                    <span className="text-xl font-bold tracking-tight">Weavr</span>
                 </div>
-                <div className="flex items-center gap-3">
+
+                <div className="flex items-center gap-2">
+                    {/* Connection state as a quiet pill rather than loose text */}
                     <span
                         className={
-                            "text-sm " +
-                            (isConnected ? "text-green-200" : "text-red-200")
+                            "hidden sm:flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full " +
+                            (isConnected
+                                ? "bg-green-400/15 text-green-100"
+                                : "bg-red-400/20 text-red-100")
                         }
                     >
-                        {isConnected ? "● Connected" : "● Offline"}
+                        <span
+                            className={
+                                "w-1.5 h-1.5 rounded-full " +
+                                (isConnected ? "bg-green-400" : "bg-red-400")
+                            }
+                        ></span>
+                        {isConnected ? "Connected" : "Offline"}
                     </span>
 
-                    <Avatar
-                        imageUrl={currentUser.profilePicture}
-                        name={currentUser.username}
-                        size="small"
-                    />
-                    <span className="text-sm">Hi, {currentUser.username}</span>
+                    {/* The avatar and name together open the profile panel */}
+                    <button
+                        onClick={() => setShowProfile(true)}
+                        title="Edit your profile"
+                        className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-white/10 hover:bg-white/20 transition"
+                    >
+                        <Avatar
+                            imageUrl={currentUser.profilePicture}
+                            name={currentUser.username}
+                            size="small"
+                        />
+                        <span className="text-sm font-medium max-w-[10rem] truncate">
+                            {currentUser.username}
+                        </span>
+                    </button>
 
                     {currentUser.isAdmin && (
                         <button
                             onClick={onOpenAdmin}
-                            className="bg-yellow-400 text-gray-900 hover:bg-yellow-300 text-sm font-semibold px-3 py-1 rounded-lg transition"
+                            className="bg-amber-300 text-amber-950 hover:bg-amber-200 text-sm font-semibold px-3 py-1.5 rounded-lg transition shadow-sm"
                         >
                             Admin
                         </button>
                     )}
 
                     <button
-                        onClick={() => setShowProfile(true)}
-                        className="bg-white/20 hover:bg-white/30 text-sm font-semibold px-3 py-1 rounded-lg transition"
-                    >
-                        Profile
-                    </button>
-                    <button
                         onClick={onLogout}
-                        className="bg-white/20 hover:bg-white/30 text-sm font-semibold px-3 py-1 rounded-lg transition"
+                        title="Log out"
+                        className="bg-white/10 hover:bg-white/20 text-sm font-semibold px-3 py-1.5 rounded-lg transition"
                     >
                         Log out
                     </button>
@@ -886,7 +901,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
             <div className="flex-1 flex gap-4 px-6 pb-6 overflow-hidden min-h-0">
 
                 {/* Contacts panel */}
-                <div className="bg-white text-gray-800 rounded-xl w-72 flex flex-col shadow-lg overflow-hidden">
+                <div className="bg-white text-gray-800 rounded-2xl w-72 flex flex-col shadow-lg overflow-hidden">
                     <div className="px-3 py-3 border-b border-gray-200">
                         <input
                             type="text"
@@ -903,10 +918,15 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
 
                         <button
                             onClick={() => setShowSearchFilters(!showSearchFilters)}
-                            className="mt-2 text-xs text-purple-600 hover:underline"
+                            className={
+                                "mt-2 text-xs font-medium px-2 py-1 rounded-md transition " +
+                                (hasAnyFilter()
+                                    ? "bg-purple-100 text-purple-700"
+                                    : "text-gray-500 hover:bg-gray-100")
+                            }
                         >
                             {showSearchFilters ? "Hide filters" : "Filters"}
-                            {hasAnyFilter() && !showSearchFilters ? " (on)" : ""}
+                            {hasAnyFilter() && !showSearchFilters ? " · on" : ""}
                         </button>
 
                         {showSearchFilters && (
@@ -1078,8 +1098,18 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                             <button
                                                 key={oneGroup._id}
                                                 onClick={() => handleSelectGroup(oneGroup)}
-                                                className="w-full text-left px-4 py-3 hover:bg-purple-50 transition flex items-center gap-2"
+                                                className={
+                                                    "relative w-full text-left pl-4 pr-3 py-2.5 transition flex items-center gap-2.5 " +
+                                                    (selectedGroup !== null &&
+                                                        selectedGroup._id === oneGroup._id
+                                                        ? "bg-purple-50 font-semibold"
+                                                        : "hover:bg-gray-50")
+                                                }
                                             >
+                                                {selectedGroup !== null &&
+                                                    selectedGroup._id === oneGroup._id && (
+                                                        <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-purple-600"></span>
+                                                    )}
                                                 <Avatar
                                                     imageUrl={oneGroup.groupPicture}
                                                     name={oneGroup.name || "?"}
@@ -1120,10 +1150,17 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                 key={contact._id}
                                                 onClick={() => handleSelectContact(contact)}
                                                 className={
-                                                    "w-full text-left px-4 py-3 hover:bg-purple-50 transition flex items-center gap-2 " +
-                                                    (isSelected ? "bg-purple-100 font-semibold" : "")
+                                                    "relative w-full text-left pl-4 pr-3 py-2.5 transition flex items-center gap-2.5 " +
+                                                    (isSelected
+                                                        ? "bg-purple-50 font-semibold"
+                                                        : "hover:bg-gray-50")
                                                 }
                                             >
+                                                {/* A bar on the edge marks the open conversation */}
+                                                {isSelected && (
+                                                    <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-purple-600"></span>
+                                                )}
+
                                                 {/* Avatar with the status dot sitting on its corner */}
                                                 <span className="relative shrink-0">
                                                     <Avatar
@@ -1133,9 +1170,9 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                     />
                                                     <span
                                                         className={
-                                                            "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white " +
+                                                            "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white " +
                                                             (statusMap[contact._id] === "online"
-                                                                ? "bg-green-500"
+                                                                ? "bg-green-500 status-online"
                                                                 : statusMap[contact._id] === "away"
                                                                     ? "bg-yellow-400"
                                                                     : "bg-gray-300")
@@ -1169,10 +1206,20 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                 </div>
 
                 {/* Conversation panel */}
-                <div className="bg-white text-gray-800 rounded-xl flex-1 flex flex-col shadow-lg overflow-hidden">
+                <div className="bg-white text-gray-800 rounded-2xl flex-1 flex flex-col shadow-lg overflow-hidden">
                     {selectedContact === null && selectedGroup === null ? (
-                        <div className="flex-1 flex items-center justify-center text-gray-400">
-                            Pick a contact or group to start chatting
+                        <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+                            <img
+                                src="/logo.png"
+                                alt=""
+                                className="w-16 h-16 opacity-25 mb-4"
+                            />
+                            <p className="text-gray-500 font-medium">
+                                Pick a contact or group to start chatting
+                            </p>
+                            <p className="text-gray-400 text-sm mt-1">
+                                Your conversations stay in sync in real time.
+                            </p>
                         </div>
                     ) : selectedGroup !== null ? (
                         <>
@@ -1211,17 +1258,23 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                             </div>
 
                             {/* Group messages */}
-                            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5 bg-gradient-to-b from-gray-50 to-white">
                                 {groupMessages.length === 0 ? (
-                                    <p className="text-gray-400 text-center mt-4">
-                                        No messages yet. Start the conversation!
-                                    </p>
+                                    <div className="text-center mt-10">
+                                        <div className="text-4xl mb-2">💬</div>
+                                        <p className="text-gray-400">
+                                            No messages yet. Start the conversation!
+                                        </p>
+                                    </div>
                                 ) : filteredGroupMessages.length === 0 ? (
-                                    <p className="text-gray-400 text-center mt-4">
-                                        No messages match "{groupSearchTerm}"
-                                    </p>
+                                    <div className="text-center mt-10">
+                                        <div className="text-4xl mb-2">🔍</div>
+                                        <p className="text-gray-400">
+                                            No messages match "{groupSearchTerm}"
+                                        </p>
+                                    </div>
                                 ) : (
-                                    filteredGroupMessages.map((oneMessage) => {
+                                    filteredGroupMessages.map((oneMessage, messageIndex) => {
                                         const isMine = oneMessage.sender === currentUser.id;
                                         const isHidden = oneMessage.isHidden === true;
                                         // Messages that @mention me get a ring, so they're
@@ -1239,60 +1292,98 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                             ? senderContact.username
                                             : "Someone";
 
+                                        // Show a day heading whenever the date changes
+                                        const previousMessage =
+                                            messageIndex > 0
+                                                ? filteredGroupMessages[messageIndex - 1]
+                                                : null;
+                                        const startsNewDay =
+                                            previousMessage === null ||
+                                            !isSameDay(
+                                                previousMessage.createdAt,
+                                                oneMessage.createdAt
+                                            );
+
                                         return (
-                                            <div
-                                                key={oneMessage._id}
-                                                className={
-                                                    "max-w-[70%] px-3 py-2 rounded-lg " +
-                                                    (isMine
-                                                        ? "bg-purple-600 text-white ml-auto"
-                                                        : "bg-purple-100 text-purple-900") +
-                                                    (mentionsMe
-                                                        ? " ring-2 ring-yellow-400"
-                                                        : "")
-                                                }
-                                            >
-                                                {/* Only label other people's messages -
-                                                    my own are already on the right. */}
-                                                {!isMine && (
-                                                    <button
-                                                        onClick={() =>
-                                                            setProfileUserId(oneMessage.sender)
-                                                        }
-                                                        title={"View " + senderName + "'s profile"}
-                                                        className="flex items-center gap-1.5 mb-1 hover:opacity-80 transition"
-                                                    >
-                                                        <Avatar
-                                                            imageUrl={senderContact?.profilePicture}
-                                                            name={senderName}
-                                                            size="small"
-                                                        />
-                                                        <span className="text-xs font-semibold text-purple-700">
-                                                            {senderName}
+                                            <div key={oneMessage._id}>
+                                                {startsNewDay && (
+                                                    <div className="flex items-center gap-3 my-4">
+                                                        <div className="flex-1 h-px bg-gray-200"></div>
+                                                        <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                                                            {toDayLabel(oneMessage.createdAt)}
                                                         </span>
-                                                    </button>
+                                                        <div className="flex-1 h-px bg-gray-200"></div>
+                                                    </div>
                                                 )}
+                                                <div
+                                                    className={
+                                                        "message-in max-w-[70%] w-fit px-3.5 py-2 shadow-sm " +
+                                                        (isMine
+                                                            ? "bg-purple-600 text-white ml-auto rounded-2xl rounded-br-md"
+                                                            : "bg-white text-gray-800 border border-gray-200 rounded-2xl rounded-bl-md") +
+                                                        (mentionsMe
+                                                            ? " ring-2 ring-amber-400"
+                                                            : "")
+                                                    }
+                                                >
+                                                    {/* Only label other people's messages -
+                                                        my own are already on the right. */}
+                                                    {!isMine && (
+                                                        <button
+                                                            onClick={() =>
+                                                                setProfileUserId(oneMessage.sender)
+                                                            }
+                                                            title={"View " + senderName + "'s profile"}
+                                                            className="flex items-center gap-1.5 mb-1 hover:opacity-80 transition"
+                                                        >
+                                                            <Avatar
+                                                                imageUrl={senderContact?.profilePicture}
+                                                                name={senderName}
+                                                                size="small"
+                                                            />
+                                                            <span className="text-xs font-semibold text-purple-700">
+                                                                {senderName}
+                                                            </span>
+                                                        </button>
+                                                    )}
 
-                                                <MessageContent
-                                                    text={oneMessage.text}
-                                                    fileUrl={oneMessage.fileUrl}
-                                                    fileName={oneMessage.fileName}
-                                                    fileType={oneMessage.fileType}
-                                                    isHidden={isHidden}
-                                                    onOpenFile={setOpenFile}
-                                                />
+                                                    <MessageContent
+                                                        text={oneMessage.text}
+                                                        fileUrl={oneMessage.fileUrl}
+                                                        fileName={oneMessage.fileName}
+                                                        fileType={oneMessage.fileType}
+                                                        isHidden={isHidden}
+                                                        onOpenFile={setOpenFile}
+                                                    />
 
-                                                {!isMine && !isHidden && (
-                                                    <button
-                                                        onClick={() =>
-                                                            handleFlagMessage("group", oneMessage._id)
-                                                        }
-                                                        title="Report this message"
-                                                        className="block mt-1 text-[10px] opacity-50 hover:opacity-100 hover:underline"
-                                                    >
-                                                        Report
-                                                    </button>
-                                                )}
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span
+                                                            className={
+                                                                "text-[10px] " +
+                                                                (isMine
+                                                                    ? "text-purple-200"
+                                                                    : "text-gray-400")
+                                                            }
+                                                        >
+                                                            {toClockTime(oneMessage.createdAt)}
+                                                        </span>
+
+                                                        {!isMine && !isHidden && (
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleFlagMessage(
+                                                                        "group",
+                                                                        oneMessage._id
+                                                                    )
+                                                                }
+                                                                title="Report this message"
+                                                                className="text-[10px] text-gray-400 hover:text-red-500 hover:underline"
+                                                            >
+                                                                Report
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
                                         );
                                     })
@@ -1315,7 +1406,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                 />
                                 <label
                                     htmlFor="groupFileUpload"
-                                    className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-lg transition"
+                                    className="cursor-pointer bg-gray-100 hover:bg-purple-100 text-lg leading-none w-10 h-10 flex items-center justify-center rounded-full transition shrink-0"
                                     title="Send a file"
                                 >
                                     📎
@@ -1351,12 +1442,12 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                     : "Message " + selectedGroup.name + "... (@ to mention)"
                                         }
                                         disabled={isUploading}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+                                        className="w-full border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition"
                                     />
                                 </div>
                                 <button
                                     onClick={handleSendGroupMessage}
-                                    className="bg-purple-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-purple-700 transition"
+                                    className="bg-purple-600 text-white font-semibold px-5 py-2 rounded-full hover:bg-purple-700 active:scale-95 transition shadow-sm shrink-0"
                                 >
                                     Send
                                 </button>
@@ -1397,17 +1488,23 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                 />
                             </div>
 
-                            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5 bg-gradient-to-b from-gray-50 to-white">
                                 {messages.length === 0 ? (
-                                    <p className="text-gray-400 text-center mt-4">
-                                        No messages yet. Say hello!
-                                    </p>
+                                    <div className="text-center mt-10">
+                                        <div className="text-4xl mb-2">👋</div>
+                                        <p className="text-gray-400">
+                                            No messages yet. Say hello!
+                                        </p>
+                                    </div>
                                 ) : filteredMessages.length === 0 ? (
-                                    <p className="text-gray-400 text-center mt-4">
-                                        No messages match "{searchTerm}"
-                                    </p>
+                                    <div className="text-center mt-10">
+                                        <div className="text-4xl mb-2">🔍</div>
+                                        <p className="text-gray-400">
+                                            No messages match "{searchTerm}"
+                                        </p>
+                                    </div>
                                 ) : (
-                                    filteredMessages.map((singleMessage) => {
+                                    filteredMessages.map((singleMessage, messageIndex) => {
                                         const isMine = singleMessage.sender === currentUser.id;
                                         // An admin removed this one. The server already
                                         // stripped the content, so only a note remains.
@@ -1415,44 +1512,82 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                         const mentionsMe =
                                             singleMessage.mentions !== undefined &&
                                             singleMessage.mentions.includes(currentUser.id);
-                                        return (
-                                            <div
-                                                key={singleMessage._id}
-                                                className={
-                                                    "max-w-[70%] px-3 py-2 rounded-lg " +
-                                                    (isMine
-                                                        ? "bg-purple-600 text-white ml-auto"
-                                                        : "bg-purple-100 text-purple-900") +
-                                                    (mentionsMe
-                                                        ? " ring-2 ring-yellow-400"
-                                                        : "")
-                                                }
-                                            >
-                                                <MessageContent
-                                                    text={singleMessage.text}
-                                                    fileUrl={singleMessage.fileUrl}
-                                                    fileName={singleMessage.fileName}
-                                                    fileType={singleMessage.fileType}
-                                                    isHidden={isHidden}
-                                                    onOpenFile={setOpenFile}
-                                                />
 
-                                                {/* You can report someone else's message
-                                                    to the admins, but not your own. */}
-                                                {!isMine && !isHidden && (
-                                                    <button
-                                                        onClick={() =>
-                                                            handleFlagMessage(
-                                                                "direct",
-                                                                singleMessage._id
-                                                            )
-                                                        }
-                                                        title="Report this message"
-                                                        className="block mt-1 text-[10px] opacity-50 hover:opacity-100 hover:underline"
-                                                    >
-                                                        Report
-                                                    </button>
+                                        // Show a day heading whenever the date changes
+                                        const previousMessage =
+                                            messageIndex > 0
+                                                ? filteredMessages[messageIndex - 1]
+                                                : null;
+                                        const startsNewDay =
+                                            previousMessage === null ||
+                                            !isSameDay(
+                                                previousMessage.createdAt,
+                                                singleMessage.createdAt
+                                            );
+
+                                        return (
+                                            <div key={singleMessage._id}>
+                                                {startsNewDay && (
+                                                    <div className="flex items-center gap-3 my-4">
+                                                        <div className="flex-1 h-px bg-gray-200"></div>
+                                                        <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                                                            {toDayLabel(singleMessage.createdAt)}
+                                                        </span>
+                                                        <div className="flex-1 h-px bg-gray-200"></div>
+                                                    </div>
                                                 )}
+                                                <div
+                                                    className={
+                                                        "message-in max-w-[70%] w-fit px-3.5 py-2 shadow-sm " +
+                                                        (isMine
+                                                            ? "bg-purple-600 text-white ml-auto rounded-2xl rounded-br-md"
+                                                            : "bg-white text-gray-800 border border-gray-200 rounded-2xl rounded-bl-md") +
+                                                        (mentionsMe
+                                                            ? " ring-2 ring-amber-400"
+                                                            : "")
+                                                    }
+                                                >
+                                                    <MessageContent
+                                                        text={singleMessage.text}
+                                                        fileUrl={singleMessage.fileUrl}
+                                                        fileName={singleMessage.fileName}
+                                                        fileType={singleMessage.fileType}
+                                                        isHidden={isHidden}
+                                                        onOpenFile={setOpenFile}
+                                                    />
+
+                                                    {/* Time sits with the Report link so
+                                                        they share one row under the text */}
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span
+                                                            className={
+                                                                "text-[10px] " +
+                                                                (isMine
+                                                                    ? "text-purple-200"
+                                                                    : "text-gray-400")
+                                                            }
+                                                        >
+                                                            {toClockTime(singleMessage.createdAt)}
+                                                        </span>
+
+                                                        {/* You can report someone else's
+                                                            message, but not your own. */}
+                                                        {!isMine && !isHidden && (
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleFlagMessage(
+                                                                        "direct",
+                                                                        singleMessage._id
+                                                                    )
+                                                                }
+                                                                title="Report this message"
+                                                                className="text-[10px] text-gray-400 hover:text-red-500 hover:underline"
+                                                            >
+                                                                Report
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
                                         );
                                     })
@@ -1475,7 +1610,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                 />
                                 <label
                                     htmlFor="imageUpload"
-                                    className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-lg transition"
+                                    className="cursor-pointer bg-gray-100 hover:bg-purple-100 text-lg leading-none w-10 h-10 flex items-center justify-center rounded-full transition shrink-0"
                                     title="Send a file"
                                 >
                                     📎
@@ -1509,12 +1644,12 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                     : "Message " + selectedContact.username + "..."
                                         }
                                         disabled={isUploading}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+                                        className="w-full border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition"
                                     />
                                 </div>
                                 <button
                                     onClick={handleSendMessage}
-                                    className="bg-purple-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-purple-700 transition"
+                                    className="bg-purple-600 text-white font-semibold px-5 py-2 rounded-full hover:bg-purple-700 active:scale-95 transition shadow-sm shrink-0"
                                 >
                                     Send
                                 </button>

@@ -102,12 +102,12 @@ function ProfilePanel({
   return (
     // Full-screen dim overlay; clicking it closes the panel
     <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+      className="modal-backdrop fixed inset-0 flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       {/* The panel itself. stopPropagation so clicking INSIDE doesn't close it */}
       <div
-        className="bg-white text-gray-800 rounded-xl w-full max-w-sm p-6 shadow-xl"
+        className="panel-in modal-card bg-white text-gray-800 rounded-2xl w-full max-w-sm p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-2xl font-bold text-purple-700 mb-4">My Profile</h2>

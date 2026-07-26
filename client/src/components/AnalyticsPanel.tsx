@@ -57,7 +57,7 @@ function AnalyticsPanel({
 }: AnalyticsPanelProps) {
   if (report === null) {
     return (
-      <div className="bg-white text-gray-800 rounded-xl shadow p-4">
+      <div className="bg-white text-gray-800 rounded-2xl shadow p-4">
         <p className="text-gray-400 text-sm">Loading analytics...</p>
       </div>
     );
@@ -75,7 +75,7 @@ function AnalyticsPanel({
   const rangeChoices = [7, 14, 30];
 
   return (
-    <div className="bg-white text-gray-800 rounded-xl shadow overflow-hidden">
+    <div className="bg-white text-gray-800 rounded-2xl shadow overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
         <span className="font-semibold text-purple-700">
           Analytics &amp; Reporting

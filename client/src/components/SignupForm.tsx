@@ -37,7 +37,7 @@ function SignupForm() {
   }
 
   return (
-    <div className="bg-white text-gray-800 rounded-xl w-full max-w-sm p-6 shadow-lg">
+    <div className="panel-in modal-card bg-white text-gray-800 rounded-2xl w-full max-w-sm p-6 shadow-lg">
       <h2 className="text-2xl font-bold text-purple-700 mb-4 text-center">
         Create your Weavr account
       </h2>

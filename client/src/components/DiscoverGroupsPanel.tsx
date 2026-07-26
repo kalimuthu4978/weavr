@@ -66,11 +66,11 @@ function DiscoverGroupsPanel({ onClose, onJoined }: DiscoverGroupsPanelProps) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+      className="modal-backdrop fixed inset-0 flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white text-gray-800 rounded-xl w-full max-w-sm p-6 shadow-xl max-h-[85vh] overflow-y-auto"
+        className="panel-in modal-card bg-white text-gray-800 rounded-2xl w-full max-w-sm p-6 shadow-xl max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1">
