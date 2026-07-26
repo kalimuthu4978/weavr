@@ -50,6 +50,7 @@ Weavr is a real-time messaging platform where users can hold private one-on-one 
 **Notifications**
 - In-app unread badges for direct and group chats
 - Browser (desktop) push notifications for new messages, shown only while the tab is in the background
+- `@username` mentions with a picker as you type; mentions get their own notification wording and a highlight on the message
 
 **Search**
 - Search within an open conversation (direct or group)
@@ -66,7 +67,7 @@ Weavr is a real-time messaging platform where users can hold private one-on-one 
 **Profiles**
 - Editable username, status message, and profile picture
 - Profile pictures shown in the contact list, conversation headers, and group chats
-- A contact's status message shows in the conversation header
+- Click a contact or a group sender to view their profile: status, custom status message, join date, and recent activity (messages sent, groups joined, last active)
 
 **Presence**
 - Live online / away / offline indicators
@@ -76,13 +77,17 @@ Weavr is a real-time messaging platform where users can hold private one-on-one 
 - Multiple group admins per group, with the creator permanently an admin
 - Add and remove members, promote and demote admins
 - Group name and group picture, editable by any group admin
-- Members can leave a group themselves
+- Public groups listed under **Discover**, so anyone can find and join them; groups are invite-only by default
+- Members can leave a group themselves, and the creator can delete it outright
+- File sharing works in group chats as well as direct messages
 
 **Admin Panel**
 - Admin-only dashboard, protected by layered auth + admin middleware
 - Platform stats: total users, groups, messages, and open reports
+- **Analytics & reporting** — message volume per day over a selectable 7/14/30 day range, most active users and groups, user activity (online now, active today/this week, new signups), engagement (average messages per user, weekly active share, attachment and group shares), and system health (uptime, memory, database latency)
 - View all users and groups
 - Create, rename, and delete groups (deleting a group also removes its messages)
+- Manage any group's membership and permissions — add/remove members, grant or revoke group-admin rights
 - Activate/deactivate accounts — a deactivated user keeps their data but cannot log in
 - Delete users (with a self-delete guard)
 - Content moderation: users report messages, admins hide them or dismiss the report
@@ -119,9 +124,9 @@ The client talks to the server two ways: **HTTP** for request/response actions (
 ### Data Models
 
 - **User** — username, email, hashed password, status, statusMessage, profilePicture, isAdmin, isActive
-- **Message** — text, sender, receiver, optional file (url/name/type), moderation flags, timestamps
-- **Group** — name, members[], groupAdmins[], groupPicture, createdBy, timestamps
-- **GroupMessage** — text, sender, group, moderation flags, timestamps
+- **Message** — text, sender, receiver, optional file (url/name/type), mentions[], moderation flags, timestamps
+- **Group** — name, members[], groupAdmins[], groupPicture, isPublic, createdBy, timestamps
+- **GroupMessage** — text, sender, group, optional file, mentions[], moderation flags, timestamps
 
 ---
 
@@ -208,7 +213,6 @@ Environment variables are set in each platform's dashboard rather than committed
 
 - **Cold starts** — the free-tier backend sleeps after ~15 minutes idle; the first request afterwards takes 30–60 seconds.
 - **Presence is per-connection** — a user with two tabs open is marked offline when either one closes.
-- **Attachments in group chats** — group messages are text-only; file sharing is available in direct messages.
 - **Cloudinary free-tier caps** — the upload limit is set to 50 MB, but Cloudinary's own free tier caps images at 10 MB.
 - **Push notifications need an open tab** — these use the browser Notification API, not a service worker, so they only fire while Weavr is open in a background tab. They also require https (or localhost).
 - **Older uploads are broken** — files uploaded before the Cloudinary migration lived on Render's ephemeral disk and are gone. New uploads persist.
@@ -217,10 +221,10 @@ Environment variables are set in each platform's dashboard rather than committed
 
 ## Future Enhancements
 
-- File and image sharing inside group chats
 - Service-worker push notifications that work with the app fully closed
 - Message timestamps, typing indicators, and edit/delete
 - Read receipts
+- Exporting analytics reports as CSV
 
 ---
 
