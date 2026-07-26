@@ -1,44 +1,32 @@
 import multer from "multer";
-import path from "path";
 import express from "express";
 
-// Tell multer WHERE to save files and HOW to name them
-const storage = multer.diskStorage({
-  // The folder to save uploads into
-  destination: function (req, file, callback) {
-    callback(null, "uploads");
-  },
-  // The filename to save as. We make it unique so two files with the
-  // same name don't overwrite each other.
-  filename: function (req, file, callback) {
-    // e.g. 1720000000000-987654321.png
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    // Keep the original file extension (.png, .jpg, etc.)
-    const fileExtension = path.extname(file.originalname);
-    callback(null, uniqueSuffix + fileExtension);
-  },
-});
+// We keep the uploaded file in memory (as a Buffer) instead of writing it to
+// the server's disk. The route handler then forwards that Buffer straight to
+// Cloudinary. Render's disk is temporary, so anything written there is lost on
+// the next restart or deploy.
+const storage = multer.memoryStorage();
 
-// Only allow image files for now (we can widen this later for documents)
+// Decides which files we accept. The brief asks for images, videos and documents.
 function fileFilter(
   req: express.Request,
   file: Express.Multer.File,
   callback: multer.FileFilterCallback
 ) {
-  // Allow images and common document types
   const allowedTypes = [
-    "image/",                                                        // any image
-    "application/pdf",                                               // PDF
-    "application/msword",                                            // .doc
+    "image/", // any image (png, jpg, gif, webp, ...)
+    "video/", // any video (mp4, webm, quicktime/mov, ...)
+    "application/pdf", // PDF
+    "application/msword", // .doc
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
-    "application/vnd.ms-excel",                                      // .xls
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",        // .xlsx
-    "text/plain",                                                    // .txt
+    "application/vnd.ms-excel", // .xls
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+    "text/plain", // .txt
   ];
 
   // Accept if the file's type starts with or matches any allowed type
-  const isAllowed = allowedTypes.some((type) =>
-    file.mimetype.startsWith(type) || file.mimetype === type
+  const isAllowed = allowedTypes.some(
+    (type) => file.mimetype.startsWith(type) || file.mimetype === type
   );
 
   if (isAllowed) {
@@ -48,12 +36,27 @@ function fileFilter(
   }
 }
 
-// Create the multer uploader with a 5 MB size limit
+// Work out a simple label the frontend can switch on when displaying a message.
+// The frontend understands "image", "video" and "file".
+export function getFileTypeLabel(mimeType: string) {
+  if (mimeType.startsWith("image/")) {
+    return "image";
+  }
+  if (mimeType.startsWith("video/")) {
+    return "video";
+  }
+  return "file";
+}
+
+// The biggest file we accept. Videos are much larger than images, so this is
+// generous compared to the old 10 MB limit.
+export const MAX_UPLOAD_MB = 50;
+
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 5 MB
+    fileSize: MAX_UPLOAD_MB * 1024 * 1024,
   },
 });
 

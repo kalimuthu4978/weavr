@@ -46,7 +46,9 @@ app.use("/api/groups", groupRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/admin", adminRoutes);
 
-// Serve uploaded files as static files, so /uploads/abc.png returns the image
+// New uploads go to Cloudinary, not to this folder. We still serve /uploads so
+// that any older messages saved before the Cloudinary migration keep working
+// during local development.
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // --- Socket.io setup ---
