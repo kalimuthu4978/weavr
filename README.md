@@ -12,7 +12,7 @@ A full-stack, real-time chat application built with the MERN stack, TypeScript, 
 
 Try the live app with this demo account:
 
-- **Username:** `demo` / 'demo2'
+- **Username:** `demo` / `demo2`
 - **Password:** `demo1234`
 
 > The backend is on a free tier and sleeps after inactivity — the first login may take 30–60 seconds while the server wakes up. Just wait and try again if the first attempt is slow.
@@ -47,25 +47,45 @@ Weavr is a real-time messaging platform where users can hold private one-on-one 
 - Live online / offline presence indicators
 - Unread message badges for both direct and group chats
 
+**Notifications**
+- In-app unread badges for direct and group chats
+- Browser (desktop) push notifications for new messages, shown only while the tab is in the background
+
 **Search**
 - Search within an open conversation (direct or group)
 - Global search across all your conversations, with jump-to-conversation
+- Filter results by person, date range, and content type (text / image / video / document)
 
 **File Sharing**
-- Send images and documents (PDF, Word, Excel, text)
+- Send images, videos, and documents (PDF, Word, Excel, text)
+- Stored on Cloudinary, so uploads persist across server restarts and redeploys
 - Staged preview before sending, with optional caption
-- Click any shared file: images open a full preview, all files offer download
+- Images and videos play inline; a full preview modal offers download
 - Type and size validation on upload
 
 **Profiles**
-- Editable username and status message
+- Editable username, status message, and profile picture
+- Profile pictures shown in the contact list, conversation headers, and group chats
 - A contact's status message shows in the conversation header
+
+**Presence**
+- Live online / away / offline indicators
+- "Away" is set automatically after 2 minutes idle, or when the tab is backgrounded
+
+**Group Management**
+- Multiple group admins per group, with the creator permanently an admin
+- Add and remove members, promote and demote admins
+- Group name and group picture, editable by any group admin
+- Members can leave a group themselves
 
 **Admin Panel**
 - Admin-only dashboard, protected by layered auth + admin middleware
-- Platform stats: total users, groups, and messages
+- Platform stats: total users, groups, messages, and open reports
 - View all users and groups
+- Create, rename, and delete groups (deleting a group also removes its messages)
+- Activate/deactivate accounts — a deactivated user keeps their data but cannot log in
 - Delete users (with a self-delete guard)
+- Content moderation: users report messages, admins hide them or dismiss the report
 
 ---
 
@@ -78,7 +98,7 @@ Weavr is a real-time messaging platform where users can hold private one-on-one 
 | **Database** | MongoDB Atlas (Mongoose ODM) |
 | **Real-time** | Socket.io (WebSockets) |
 | **Auth** | JSON Web Tokens (JWT), bcrypt |
-| **File uploads** | Multer |
+| **File uploads** | Multer (in-memory) + Cloudinary |
 | **Hosting** | Netlify (frontend), Render (backend), MongoDB Atlas (database) |
 
 ---
@@ -98,10 +118,10 @@ The client talks to the server two ways: **HTTP** for request/response actions (
 
 ### Data Models
 
-- **User** — username, email, hashed password, status, statusMessage, isAdmin
-- **Message** — text, sender, receiver, optional file (url/name/type), timestamps
-- **Group** — name, members[], createdBy, timestamps
-- **GroupMessage** — text, sender, group, timestamps
+- **User** — username, email, hashed password, status, statusMessage, profilePicture, isAdmin, isActive
+- **Message** — text, sender, receiver, optional file (url/name/type), moderation flags, timestamps
+- **Group** — name, members[], groupAdmins[], groupPicture, createdBy, timestamps
+- **GroupMessage** — text, sender, group, moderation flags, timestamps
 
 ---
 
@@ -110,6 +130,7 @@ The client talks to the server two ways: **HTTP** for request/response actions (
 ### Prerequisites
 - Node.js v18+
 - A MongoDB Atlas account (free tier is fine)
+- A Cloudinary account (free tier is fine) — used for file and picture uploads
 
 ### 1. Clone and install
 
@@ -133,6 +154,12 @@ Create `server/.env`:
 MONGO_URI=your_mongodb_atlas_connection_string
 JWT_SECRET=any_long_random_string
 SERVER_URL=http://localhost:5000
+
+# Cloudinary — from your Cloudinary dashboard.
+# Without these, file and picture uploads return a clear 500 error.
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 Create `client/.env`:
@@ -180,17 +207,20 @@ Environment variables are set in each platform's dashboard rather than committed
 ## Known Limitations
 
 - **Cold starts** — the free-tier backend sleeps after ~15 minutes idle; the first request afterwards takes 30–60 seconds.
-- **Uploaded files are not permanent** — Render's free tier uses an ephemeral disk, so files uploaded to the server are cleared when the service restarts. Messages, users, and groups (all in MongoDB) persist normally. The fix is migrating uploads to cloud storage such as Cloudinary or S3.
 - **Presence is per-connection** — a user with two tabs open is marked offline when either one closes.
+- **Attachments in group chats** — group messages are text-only; file sharing is available in direct messages.
+- **Cloudinary free-tier caps** — the upload limit is set to 50 MB, but Cloudinary's own free tier caps images at 10 MB.
+- **Push notifications need an open tab** — these use the browser Notification API, not a service worker, so they only fire while Weavr is open in a background tab. They also require https (or localhost).
+- **Older uploads are broken** — files uploaded before the Cloudinary migration lived on Render's ephemeral disk and are gone. New uploads persist.
 
 ---
 
 ## Future Enhancements
 
-- Migrate file storage to Cloudinary so uploads persist
-- Profile pictures for users and groups
-- Group member management — multiple admins, adding and removing members
+- File and image sharing inside group chats
+- Service-worker push notifications that work with the app fully closed
 - Message timestamps, typing indicators, and edit/delete
+- Read receipts
 
 ---
 
@@ -204,15 +234,18 @@ weavr/
 │       ├── api/             # Backend API calls
 │       ├── auth/            # Session/token handling
 │       ├── components/      # React components
+│       ├── utils/           # Notification helpers
 │       ├── config.ts        # Centralized backend URL
 │       └── socket.ts        # Shared Socket.io connection
 └── server/                  # Express backend
-    ├── uploads/             # Uploaded files (local only)
+    ├── uploads/             # Legacy local uploads (pre-Cloudinary)
     └── src/
-        ├── config/          # DB connection, upload config
+        ├── config/          # DB connection, Cloudinary, upload config
         ├── middleware/      # Auth and admin guards
         ├── models/          # Mongoose schemas
-        └── routes/          # API endpoints
+        ├── routes/          # API endpoints
+        ├── socket/          # Modular Socket.io handlers
+        └── utils/           # Shared server helpers
 ```
 
 ---
