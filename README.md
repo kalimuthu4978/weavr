@@ -10,10 +10,17 @@ A full-stack, real-time chat application built with the MERN stack, TypeScript, 
 
 ## Demo Credentials
 
-Try the live app with this demo account:
+Try the live app with these demo accounts (password `demo1234` for both):
 
-- **Username:** `demo` / `demo2`
-- **Password:** `demo1234`
+| Username | Password | Access |
+| --- | --- | --- |
+| `demo` | `demo1234` | **Admin** — also has the Admin dashboard |
+| `demo2` | `demo1234` | Regular user |
+
+Log in as `demo` and click **Admin** in the header to see the dashboard:
+analytics and reporting, user management, group management, and the content
+moderation queue. Log in as `demo2` in a second window to see the app as an
+ordinary user, and to try real-time messaging between the two.
 
 > The backend is on a free tier and sleeps after inactivity — the first login may take 30–60 seconds while the server wakes up. Just wait and try again if the first attempt is slow.
 
@@ -193,7 +200,10 @@ Open `http://localhost:5173`. Register two accounts (use an incognito window for
 
 ### 4. Creating an admin
 
-Admin access is granted directly in the database, by design. In MongoDB Atlas, find your user in the `users` collection and set `isAdmin` to `true`. Log out and back in — an **Admin** button appears in the header.
+Admin access is granted directly in the database, by design — there is no
+route that can promote an account, so it cannot be escalated through the API.
+In MongoDB Atlas, find your user in the `users` collection and set `isAdmin`
+to `true`. Log out and back in — an **Admin** button appears in the header.
 
 ---
 
