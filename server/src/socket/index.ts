@@ -1,8 +1,9 @@
 import { Server } from "socket.io";
 import http from "http";
-import { handleUserOnline, registerDisconnect } from "./presence";
+import { handleUserOnline, registerDisconnect, registerStatusChange } from "./presence";
 import { registerMessageHandlers } from "./messageHandlers";
 import { registerGroupHandlers } from "./groupHandlers";
+
 
 // Creates the Socket.io server and wires up the connection handler.
 // On each connection it delegates to the specialized handler modules,
@@ -28,6 +29,9 @@ export function setupSocket(httpServer: http.Server, allowedOrigins: string[]) {
 
     // Group message listeners
     registerGroupHandlers(io, socket, userId);
+
+    // Presence status change listener
+    registerStatusChange(io, socket, userId);
 
     // Handle this socket disconnecting
     registerDisconnect(io, socket, userId);
