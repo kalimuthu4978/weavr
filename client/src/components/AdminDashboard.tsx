@@ -5,6 +5,7 @@ import {
   fetchAllUsers,
   fetchAllGroups,
   fetchFlaggedMessages,
+  fetchAnalytics,
   deleteUser,
   setUserActive,
   adminRenameGroup,
@@ -17,8 +18,10 @@ import type {
   AdminUser,
   AdminGroup,
   FlaggedMessage,
+  AnalyticsReport,
 } from "../api/admin";
 import Avatar from "./Avatar";
+import AnalyticsPanel from "./AnalyticsPanel";
 
 type AdminDashboardProps = {
   currentUser: StoredUser;
@@ -30,12 +33,30 @@ function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [groups, setGroups] = useState<AdminGroup[]>([]);
   const [flagged, setFlagged] = useState<FlaggedMessage[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsReport | null>(null);
+  // How many days the message volume chart covers
+  const [analyticsRange, setAnalyticsRange] = useState(14);
   const [feedback, setFeedback] = useState("");
 
   // Load everything when the dashboard opens
   useEffect(() => {
     loadAll();
   }, []);
+
+  // Reload just the analytics when the user picks a different range,
+  // rather than refetching every list as well.
+  useEffect(() => {
+    async function loadAnalytics() {
+      try {
+        const analyticsData = await fetchAnalytics(analyticsRange);
+        setAnalytics(analyticsData);
+      } catch (error) {
+        console.log("Could not load analytics:", error);
+      }
+    }
+
+    loadAnalytics();
+  }, [analyticsRange]);
 
   async function loadAll() {
     try {
@@ -185,6 +206,15 @@ function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
           </div>
           <div className="text-sm text-gray-500">Reported</div>
         </div>
+      </div>
+
+      {/* Analytics & reporting */}
+      <div className="mb-6">
+        <AnalyticsPanel
+          report={analytics}
+          rangeInDays={analyticsRange}
+          onChangeRange={setAnalyticsRange}
+        />
       </div>
 
       {/* Two columns: users and groups */}

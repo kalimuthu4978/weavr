@@ -37,6 +37,52 @@ export type AdminGroup = {
   groupPicture?: string;
 };
 
+// Everything behind the Analytics & Reporting section
+export type AnalyticsReport = {
+  rangeInDays: number;
+  messagesPerDay: {
+    date: string; // "YYYY-MM-DD"
+    direct: number;
+    group: number;
+    total: number;
+  }[];
+  topUsers: {
+    userId: string;
+    username: string;
+    profilePicture: string;
+    messageCount: number;
+  }[];
+  topGroups: {
+    groupId: string;
+    name: string;
+    groupPicture: string;
+    memberCount: number;
+    messageCount: number;
+  }[];
+  userActivity: {
+    totalUsers: number;
+    deactivatedUsers: number;
+    newThisWeek: number;
+    onlineNow: number;
+    activeToday: number;
+    activeThisWeek: number;
+  };
+  engagement: {
+    totalMessages: number;
+    averageMessagesPerUser: number;
+    weeklyActivePercent: number;
+    attachmentPercent: number;
+    groupSharePercent: number;
+  };
+  system: {
+    uptimeMinutes: number;
+    memoryUsedMb: number;
+    memoryTotalMb: number;
+    databaseLatencyMs: number;
+    nodeVersion: string;
+  };
+};
+
 // One message waiting for an admin to review it
 export type FlaggedMessage = {
   _id: string;
@@ -62,6 +108,16 @@ export async function fetchAllUsers(): Promise<AdminUser[]> {
   const response = await fetch(`${ADMIN_URL}/users`, { headers: authHeader() });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || "Failed to load users");
+  return data;
+}
+
+// The reporting section. days controls how far the volume chart looks back.
+export async function fetchAnalytics(days: number): Promise<AnalyticsReport> {
+  const response = await fetch(`${ADMIN_URL}/analytics?days=${days}`, {
+    headers: authHeader(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to load analytics");
   return data;
 }
 

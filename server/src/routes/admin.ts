@@ -5,6 +5,7 @@ import Message from "../models/Message";
 import GroupMessage from "../models/GroupMessage";
 import requireAuth from "../middleware/auth";
 import requireAdmin from "../middleware/admin";
+import { buildAnalyticsReport } from "../utils/analytics";
 
 const router = express.Router();
 
@@ -29,6 +30,29 @@ router.get("/stats", async (req, res) => {
     });
   } catch (error) {
     console.log("Error loading stats:", error);
+    res.status(500).json({ message: "Something went wrong" });
+  }
+});
+
+// GET /api/admin/analytics?days=14  ->  the full reporting section:
+// message volume over time, most active users and groups, user activity,
+// engagement figures and basic system health.
+// The heavy lifting lives in utils/analytics.ts to keep this file readable.
+router.get("/analytics", async (req, res) => {
+  try {
+    // Default to a fortnight, and keep the range sensible
+    let numberOfDays = Number(req.query.days) || 14;
+    if (numberOfDays < 1) {
+      numberOfDays = 1;
+    }
+    if (numberOfDays > 90) {
+      numberOfDays = 90;
+    }
+
+    const report = await buildAnalyticsReport(numberOfDays);
+    res.status(200).json(report);
+  } catch (error) {
+    console.log("Error building analytics:", error);
     res.status(500).json({ message: "Something went wrong" });
   }
 });
