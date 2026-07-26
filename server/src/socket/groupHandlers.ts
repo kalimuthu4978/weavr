@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 import Group from "../models/Group";
 import GroupMessage from "../models/GroupMessage";
+import { resolveMentionedUserIds } from "../utils/mentions";
 
 // Registers all group message listeners for a connected socket.
 export function registerGroupHandlers(io: Server, socket: Socket, userId: string) {
@@ -40,6 +41,17 @@ export function registerGroupHandlers(io: Server, socket: Socket, userId: string
         return;
       }
 
+      // Work out who was mentioned with @username. Only group members count,
+      // so an @ can't be used to ping somebody outside the group.
+      const memberIds = group.members.map((oneMemberId: any) =>
+        oneMemberId.toString()
+      );
+      const mentionedIds = await resolveMentionedUserIds(
+        text || "",
+        userId,
+        memberIds
+      );
+
       // Save the group message with whatever it carries
       const newGroupMessage = new GroupMessage({
         text: text || "",
@@ -48,6 +60,7 @@ export function registerGroupHandlers(io: Server, socket: Socket, userId: string
         fileUrl: fileUrl,
         fileName: fileName,
         fileType: fileType,
+        mentions: mentionedIds,
       });
       await newGroupMessage.save();
 

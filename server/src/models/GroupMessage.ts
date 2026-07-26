@@ -33,6 +33,14 @@ const groupMessageSchema = new mongoose.Schema(
       ref: "Group",
       required: true,
     },
+    // Users this message mentions with @username. Resolved on the server
+    // from the text, so it can't be forged by the client.
+    mentions: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     // --- Content moderation ---
     // Any user can flag a message. Flagged messages show up in the admin
     // dashboard for review; an admin then either clears the flag or hides it.

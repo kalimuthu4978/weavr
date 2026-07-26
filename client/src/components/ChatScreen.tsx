@@ -12,6 +12,8 @@ import CreateGroupPanel from "./CreateGroupPanel";
 import GroupSettingsPanel from "./GroupSettingsPanel";
 import PendingFilesStrip from "./PendingFilesStrip";
 import MessageContent from "./MessageContent";
+import MentionPicker from "./MentionPicker";
+import { getMentionBeingTyped, completeMention } from "../utils/mentions";
 import Avatar from "./Avatar";
 import { uploadManyFiles } from "../api/upload";
 import {
@@ -29,6 +31,8 @@ type ChatMessage = {
     fileName?: string;
     fileType?: string; // "image" | "video" | "file" | ""
     createdAt: string;
+    // Ids of users this message mentions with @username
+    mentions?: string[];
     // True when an admin has hidden this message. The server blanks out the
     // content, so all we can do is show a placeholder.
     isHidden?: boolean;
@@ -43,6 +47,7 @@ type GroupMessage = {
     fileUrl?: string;
     fileName?: string;
     fileType?: string; // "image" | "video" | "file" | ""
+    mentions?: string[];
     isHidden?: boolean;
 };
 
@@ -249,8 +254,17 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                 const groupName = matchingGroup ? matchingGroup.name : "a group";
                 const senderName = findSenderName(newGroupMessage.sender);
 
+                // A mention gets its own wording so it stands out from the
+                // ordinary "new message" notifications.
+                const mentionsMe =
+                    newGroupMessage.mentions !== undefined &&
+                    newGroupMessage.mentions.includes(currentUser.id);
+                const notificationTitle = mentionsMe
+                    ? senderName + " mentioned you in " + groupName
+                    : senderName + " in " + groupName;
+
                 showMessageNotification(
-                    senderName + " in " + groupName,
+                    notificationTitle,
                     buildMessagePreview(
                         newGroupMessage.text,
                         newGroupMessage.fileType || "",
@@ -304,8 +318,13 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
             // Desktop notification for other people's messages. This only
             // actually pops up when the tab is in the background.
             if (newMessage.sender !== currentUser.id) {
+                const senderName = findSenderName(newMessage.sender);
+                const mentionsMe =
+                    newMessage.mentions !== undefined &&
+                    newMessage.mentions.includes(currentUser.id);
+
                 showMessageNotification(
-                    findSenderName(newMessage.sender),
+                    mentionsMe ? senderName + " mentioned you" : senderName,
                     buildMessagePreview(
                         newMessage.text,
                         newMessage.fileType || "",
@@ -623,6 +642,25 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
             previous.filter((_, index) => index !== indexToRemove)
         );
     }
+
+    // --- @mentions ---
+
+    // Who can be mentioned in whatever conversation is open.
+    // In a group that's its members; in a direct chat it's the other person.
+    const mentionCandidates = selectedGroup !== null
+        ? contacts.filter((oneContact) =>
+            selectedGroup.members.includes(oneContact._id)
+        )
+        : selectedContact !== null
+            ? contacts.filter(
+                (oneContact) => oneContact._id === selectedContact._id
+            )
+            : [];
+
+    // What's been typed after an "@", or null when not mid-mention.
+    // Each composer has its own text, so they're worked out separately.
+    const directMentionText = getMentionBeingTyped(message);
+    const groupMentionText = getMentionBeingTyped(groupMessageText);
 
     const sortedContacts = [...contacts].sort((firstContact, secondContact) => {
         const firstUnread = unreadIds[firstContact._id]
@@ -1146,6 +1184,11 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                     filteredGroupMessages.map((oneMessage) => {
                                         const isMine = oneMessage.sender === currentUser.id;
                                         const isHidden = oneMessage.isHidden === true;
+                                        // Messages that @mention me get a ring, so they're
+                                        // easy to spot when scrolling back through a group
+                                        const mentionsMe =
+                                            oneMessage.mentions !== undefined &&
+                                            oneMessage.mentions.includes(currentUser.id);
 
                                         // In a group you need to know WHO said it.
                                         // Look the sender up in the contact list.
@@ -1163,7 +1206,10 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                     "max-w-[70%] px-3 py-2 rounded-lg " +
                                                     (isMine
                                                         ? "bg-purple-600 text-white ml-auto"
-                                                        : "bg-purple-100 text-purple-900")
+                                                        : "bg-purple-100 text-purple-900") +
+                                                    (mentionsMe
+                                                        ? " ring-2 ring-yellow-400"
+                                                        : "")
                                                 }
                                             >
                                                 {/* Only label other people's messages -
@@ -1229,25 +1275,39 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                     📎
                                 </label>
 
-                                <input
-                                    type="text"
-                                    value={groupMessageText}
-                                    onChange={(e) => setGroupMessageText(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                            handleSendGroupMessage();
+                                {/* relative so the mention picker can sit above it */}
+                                <div className="flex-1 relative">
+                                    {groupMentionText !== null && (
+                                        <MentionPicker
+                                            filterText={groupMentionText}
+                                            candidates={mentionCandidates}
+                                            onPick={(username) =>
+                                                setGroupMessageText(
+                                                    completeMention(groupMessageText, username)
+                                                )
+                                            }
+                                        />
+                                    )}
+                                    <input
+                                        type="text"
+                                        value={groupMessageText}
+                                        onChange={(e) => setGroupMessageText(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                handleSendGroupMessage();
+                                            }
+                                        }}
+                                        placeholder={
+                                            isUploading
+                                                ? "Uploading files..."
+                                                : pendingFiles.length > 0
+                                                    ? "Add a caption (optional) and hit Send"
+                                                    : "Message " + selectedGroup.name + "... (@ to mention)"
                                         }
-                                    }}
-                                    placeholder={
-                                        isUploading
-                                            ? "Uploading files..."
-                                            : pendingFiles.length > 0
-                                                ? "Add a caption (optional) and hit Send"
-                                                : "Message " + selectedGroup.name + "..."
-                                    }
-                                    disabled={isUploading}
-                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
-                                />
+                                        disabled={isUploading}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    />
+                                </div>
                                 <button
                                     onClick={handleSendGroupMessage}
                                     className="bg-purple-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-purple-700 transition"
@@ -1301,6 +1361,9 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                         // An admin removed this one. The server already
                                         // stripped the content, so only a note remains.
                                         const isHidden = singleMessage.isHidden === true;
+                                        const mentionsMe =
+                                            singleMessage.mentions !== undefined &&
+                                            singleMessage.mentions.includes(currentUser.id);
                                         return (
                                             <div
                                                 key={singleMessage._id}
@@ -1308,7 +1371,10 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                     "max-w-[70%] px-3 py-2 rounded-lg " +
                                                     (isMine
                                                         ? "bg-purple-600 text-white ml-auto"
-                                                        : "bg-purple-100 text-purple-900")
+                                                        : "bg-purple-100 text-purple-900") +
+                                                    (mentionsMe
+                                                        ? " ring-2 ring-yellow-400"
+                                                        : "")
                                                 }
                                             >
                                                 <MessageContent
@@ -1364,25 +1430,37 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                     📎
                                 </label>
 
-                                <input
-                                    type="text"
-                                    value={message}
-                                    onChange={(e) => setMessage(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                            handleSendMessage();
+                                {/* relative so the mention picker can sit above it */}
+                                <div className="flex-1 relative">
+                                    {directMentionText !== null && (
+                                        <MentionPicker
+                                            filterText={directMentionText}
+                                            candidates={mentionCandidates}
+                                            onPick={(username) =>
+                                                setMessage(completeMention(message, username))
+                                            }
+                                        />
+                                    )}
+                                    <input
+                                        type="text"
+                                        value={message}
+                                        onChange={(e) => setMessage(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                handleSendMessage();
+                                            }
+                                        }}
+                                        placeholder={
+                                            isUploading
+                                                ? "Uploading files..."
+                                                : pendingFiles.length > 0
+                                                    ? "Add a caption (optional) and hit Send"
+                                                    : "Message " + selectedContact.username + "..."
                                         }
-                                    }}
-                                    placeholder={
-                                        isUploading
-                                            ? "Uploading files..."
-                                            : pendingFiles.length > 0
-                                                ? "Add a caption (optional) and hit Send"
-                                                : "Message " + selectedContact.username + "..."
-                                    }
-                                    disabled={isUploading}
-                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
-                                />
+                                        disabled={isUploading}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    />
+                                </div>
                                 <button
                                     onClick={handleSendMessage}
                                     className="bg-purple-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-purple-700 transition"

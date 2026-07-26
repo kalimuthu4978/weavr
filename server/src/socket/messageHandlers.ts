@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 import Message from "../models/Message";
 import { stripHiddenMessages } from "../utils/moderation";
+import { resolveMentionedUserIds } from "../utils/mentions";
 
 // Registers all one-on-one message listeners for a connected socket.
 export function registerMessageHandlers(io: Server, socket: Socket, userId: string) {
@@ -30,6 +31,12 @@ export function registerMessageHandlers(io: Server, socket: Socket, userId: stri
         return;
       }
 
+      // Work out who was mentioned with @username. In a one-to-one chat the
+      // only person who can usefully be mentioned is the other participant.
+      const mentionedIds = await resolveMentionedUserIds(text || "", userId, [
+        receiverId,
+      ]);
+
       // Save the message with whatever it carries
       const newMessage = new Message({
         text: text || "",
@@ -38,6 +45,7 @@ export function registerMessageHandlers(io: Server, socket: Socket, userId: stri
         fileUrl: fileUrl,
         fileName: fileName,
         fileType: fileType,
+        mentions: mentionedIds,
       });
       await newMessage.save();
 

@@ -1,3 +1,5 @@
+import { splitTextByMentions } from "../utils/mentions";
+
 type OpenFileRequest = {
   url: string;
   name: string;
@@ -99,8 +101,22 @@ function MessageContent({
     );
   }
 
-  // No attachment - just the words
-  return <>{text}</>;
+  // No attachment - just the words, with any @mentions picked out
+  const pieces = splitTextByMentions(text);
+
+  return (
+    <>
+      {pieces.map((onePiece, index) =>
+        onePiece.isMention ? (
+          <span key={index} className="font-semibold underline">
+            {onePiece.text}
+          </span>
+        ) : (
+          <span key={index}>{onePiece.text}</span>
+        )
+      )}
+    </>
+  );
 }
 
 export default MessageContent;
