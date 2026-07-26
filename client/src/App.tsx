@@ -51,10 +51,6 @@ function App() {
     return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
   }
 
-  if (currentUser === null) {
-    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
-  }
-
   // Admins can open the dashboard
   if (showAdmin && currentUser.isAdmin) {
     return (

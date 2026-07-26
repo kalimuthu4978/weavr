@@ -1,15 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import socket from "../socket";
 import type { StoredUser } from "../auth/session";
 import { fetchUsers } from "../api/users";
 import type { ContactUser } from "../api/users";
 import ProfilePanel from "./ProfilePanel";
-import { searchMessages } from "../api/messages";
-import type { SearchResultMessage } from "../api/messages";
+import { searchMessages, flagMessage } from "../api/messages";
+import type { SearchResultMessage, SearchFilters } from "../api/messages";
 import { fetchGroups, fetchGroupMessages } from "../api/groups";
 import type { Group } from "../api/groups";
 import CreateGroupPanel from "./CreateGroupPanel";
-import { uploadFile } from "../api/upload";
+import GroupSettingsPanel from "./GroupSettingsPanel";
+import PendingFilesStrip from "./PendingFilesStrip";
+import MessageContent from "./MessageContent";
+import Avatar from "./Avatar";
+import { uploadManyFiles } from "../api/upload";
+import {
+    requestNotificationPermission,
+    showMessageNotification,
+    buildMessagePreview,
+} from "../utils/notifications";
 
 type ChatMessage = {
     _id: string;
@@ -18,8 +27,11 @@ type ChatMessage = {
     receiver: string;
     fileUrl?: string;
     fileName?: string;
-    fileType?: string; // "image" | "file" | ""
+    fileType?: string; // "image" | "video" | "file" | ""
     createdAt: string;
+    // True when an admin has hidden this message. The server blanks out the
+    // content, so all we can do is show a placeholder.
+    isHidden?: boolean;
 };
 
 type GroupMessage = {
@@ -28,6 +40,17 @@ type GroupMessage = {
     sender: string;
     group: string;
     createdAt: string;
+    fileUrl?: string;
+    fileName?: string;
+    fileType?: string; // "image" | "video" | "file" | ""
+    isHidden?: boolean;
+};
+
+// A file that has been uploaded and is staged, waiting to be sent
+type PendingAttachment = {
+    url: string;
+    name: string;
+    type: string; // "image" | "video" | "file"
 };
 
 type ChatScreenProps = {
@@ -47,6 +70,15 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
     const [globalSearchTerm, setGlobalSearchTerm] = useState("");
     const [searchResults, setSearchResults] = useState<SearchResultMessage[]>([]);
     const [hasSearched, setHasSearched] = useState(false);
+    // Extra filters for the global search. Empty strings mean "don't filter".
+    const [searchFilters, setSearchFilters] = useState<SearchFilters>({
+        withUser: "",
+        from: "",
+        to: "",
+        contentType: "",
+    });
+    const [showSearchFilters, setShowSearchFilters] = useState(false);
+    const [showGroupSettings, setShowGroupSettings] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
     const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
     const [groupMessageText, setGroupMessageText] = useState("");
@@ -56,9 +88,9 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
     // Unread group message IDs per group id, e.g. { "6a4b5d...": ["msgId1"] }
     const [groupUnreadIds, setGroupUnreadIds] = useState<Record<string, string[]>>({});
     const [groupSearchTerm, setGroupSearchTerm] = useState("");
-    const [pendingFileUrl, setPendingFileUrl] = useState("");
-    const [pendingFileName, setPendingFileName] = useState("");
-    const [pendingFileType, setPendingFileType] = useState("");
+    // Files that have been uploaded and are waiting to be sent. Several can be
+    // staged at once, and each becomes its own message when Send is pressed.
+    const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
     const [isUploading, setIsUploading] = useState(false);
 
     const [contacts, setContacts] = useState<ContactUser[]>([]);
@@ -98,6 +130,98 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
         loadGroups();
     }, []);
 
+    // Ask once for permission to show desktop notifications. The browser only
+    // prompts the first time; after that it remembers the answer.
+    useEffect(() => {
+        requestNotificationPermission();
+    }, []);
+
+    // The socket listeners below are registered once and never re-created, so
+    // they would only ever see the EMPTY contacts array from the first render.
+    // Keeping a ref in step with the state gives them a way to read the
+    // current contacts when a message arrives.
+    const contactsRef = useRef<ContactUser[]>([]);
+    const groupsRef = useRef<Group[]>([]);
+
+    useEffect(() => {
+        contactsRef.current = contacts;
+    }, [contacts]);
+
+    useEffect(() => {
+        groupsRef.current = groups;
+    }, [groups]);
+
+    // Look up who sent a message, so the notification can name them
+    function findSenderName(senderId: string) {
+        const matchingContact = contactsRef.current.find(
+            (oneContact) => oneContact._id === senderId
+        );
+        return matchingContact ? matchingContact.username : "Someone";
+    }
+
+    // Detect user inactivity and set "away" / "online" status accordingly.
+    // Two things can make us "away":
+    //   1. No mouse/keyboard activity for IDLE_MS
+    //   2. Switching to another browser tab (the tab becomes hidden)
+    useEffect(() => {
+        let idleTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+        let isAway = false;
+
+        // How long with no activity before we count as "away" (2 minutes)
+        const IDLE_MS = 2 * 60 * 1000;
+
+        // Send a status to the server, but only when it actually changed.
+        // This stops us spamming the server on every mouse move.
+        function sendStatus(newStatus: string) {
+            const wantsAway = newStatus === "away";
+            if (wantsAway === isAway) {
+                return;
+            }
+            isAway = wantsAway;
+            console.log("Presence: emitting setStatus ->", newStatus);
+            socket.emit("setStatus", newStatus);
+        }
+
+        function goAway() {
+            sendStatus("away");
+        }
+
+        function resetIdleTimer() {
+            // Any activity: make sure we're marked online, then restart the countdown
+            sendStatus("online");
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(goAway, IDLE_MS);
+        }
+
+        // Tab switching: hidden means the user is looking at something else
+        function handleVisibilityChange() {
+            if (document.hidden) {
+                clearTimeout(idleTimer);
+                goAway();
+            } else {
+                resetIdleTimer();
+            }
+        }
+
+        // Activity events that count as "the user is here"
+        window.addEventListener("mousemove", resetIdleTimer);
+        window.addEventListener("keydown", resetIdleTimer);
+        window.addEventListener("click", resetIdleTimer);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        // Start the countdown immediately
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(goAway, IDLE_MS);
+
+        return () => {
+            clearTimeout(idleTimer);
+            window.removeEventListener("mousemove", resetIdleTimer);
+            window.removeEventListener("keydown", resetIdleTimer);
+            window.removeEventListener("click", resetIdleTimer);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+    }, []);
+
     useEffect(() => {
         function onConnect() {
             setIsConnected(true);
@@ -116,6 +240,25 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
             });
         }
         function onReceiveGroupMessage(newGroupMessage: GroupMessage) {
+            // Desktop notification for other people's messages. This only
+            // actually pops up when the tab is in the background.
+            if (newGroupMessage.sender !== currentUser.id) {
+                const matchingGroup = groupsRef.current.find(
+                    (oneGroup) => oneGroup._id === newGroupMessage.group
+                );
+                const groupName = matchingGroup ? matchingGroup.name : "a group";
+                const senderName = findSenderName(newGroupMessage.sender);
+
+                showMessageNotification(
+                    senderName + " in " + groupName,
+                    buildMessagePreview(
+                        newGroupMessage.text,
+                        newGroupMessage.fileType || "",
+                        newGroupMessage.fileName || ""
+                    )
+                );
+            }
+
             setSelectedGroup((currentlyOpenGroup) => {
                 const isForOpenGroup =
                     currentlyOpenGroup !== null &&
@@ -158,6 +301,19 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
             });
         }
         function onReceiveMessage(newMessage: ChatMessage) {
+            // Desktop notification for other people's messages. This only
+            // actually pops up when the tab is in the background.
+            if (newMessage.sender !== currentUser.id) {
+                showMessageNotification(
+                    findSenderName(newMessage.sender),
+                    buildMessagePreview(
+                        newMessage.text,
+                        newMessage.fileType || "",
+                        newMessage.fileName || ""
+                    )
+                );
+            }
+
             setSelectedContact((currentlySelected) => {
                 const otherPersonId =
                     newMessage.sender === currentUser.id
@@ -223,6 +379,9 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
         setMessages([]);
         setSearchTerm("");
         setGroupSearchTerm("");
+        // Drop anything staged, so a file picked for one chat can't be sent
+        // into a different one by accident
+        setPendingFiles([]);
         socket.emit("getConversation", contact._id);
 
         setUnreadIds((previous) => {
@@ -238,6 +397,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
         setGroupMessages([]);
         setSearchTerm("");
         setGroupSearchTerm("");
+        setPendingFiles([]);
 
         // Clear the unread badge for this group - we're reading them now
         setGroupUnreadIds((previous) => {
@@ -258,51 +418,148 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
             return;
         }
         const hasText = message.trim() !== "";
-        const hasFile = pendingFileUrl !== "";
-        if (!hasText && !hasFile) {
+        const hasFiles = pendingFiles.length > 0;
+        if (!hasText && !hasFiles) {
             return;
         }
-        socket.emit("sendMessage", {
-            text: message,
-            receiverId: selectedContact._id,
-            fileUrl: pendingFileUrl,
-            fileName: pendingFileName,
-            fileType: pendingFileType,
-        });
+
+        if (!hasFiles) {
+            // Just a plain text message
+            socket.emit("sendMessage", {
+                text: message,
+                receiverId: selectedContact._id,
+                fileUrl: "",
+                fileName: "",
+                fileType: "",
+            });
+        } else {
+            // One message per attachment. Any typed text rides along with the
+            // FIRST one, so it reads as a caption rather than repeating.
+            pendingFiles.forEach((oneFile, index) => {
+                socket.emit("sendMessage", {
+                    text: index === 0 ? message : "",
+                    receiverId: selectedContact._id,
+                    fileUrl: oneFile.url,
+                    fileName: oneFile.name,
+                    fileType: oneFile.type,
+                });
+            });
+        }
+
         setMessage("");
-        setPendingFileUrl("");
-        setPendingFileName("");
-        setPendingFileType("");
+        setPendingFiles([]);
     }
 
     function handleSendGroupMessage() {
-        if (groupMessageText.trim() === "") {
-            return;
-        }
         if (selectedGroup === null) {
             return;
         }
-        socket.emit("sendGroupMessage", {
-            text: groupMessageText,
-            groupId: selectedGroup._id,
-        });
+        const hasText = groupMessageText.trim() !== "";
+        const hasFiles = pendingFiles.length > 0;
+        if (!hasText && !hasFiles) {
+            return;
+        }
+
+        if (!hasFiles) {
+            socket.emit("sendGroupMessage", {
+                text: groupMessageText,
+                groupId: selectedGroup._id,
+                fileUrl: "",
+                fileName: "",
+                fileType: "",
+            });
+        } else {
+            // Same rule as direct messages: one message per attachment,
+            // with the typed text attached to the first.
+            pendingFiles.forEach((oneFile, index) => {
+                socket.emit("sendGroupMessage", {
+                    text: index === 0 ? groupMessageText : "",
+                    groupId: selectedGroup._id,
+                    fileUrl: oneFile.url,
+                    fileName: oneFile.name,
+                    fileType: oneFile.type,
+                });
+            });
+        }
+
         setGroupMessageText("");
+        setPendingFiles([]);
+    }
+
+    // True when at least one filter is set. Used to allow a filter-only search
+    // (e.g. "every image I sent in March") with no keyword typed.
+    function hasAnyFilter() {
+        return (
+            searchFilters.withUser !== "" ||
+            searchFilters.from !== "" ||
+            searchFilters.to !== "" ||
+            searchFilters.contentType !== ""
+        );
     }
 
     async function handleGlobalSearch() {
         const term = globalSearchTerm.trim();
-        if (term === "") {
+
+        // Nothing typed AND nothing filtered -> there's nothing to search for
+        if (term === "" && !hasAnyFilter()) {
             setSearchResults([]);
             setHasSearched(false);
             return;
         }
+
         setHasSearched(true);
         try {
-            const results = await searchMessages(term);
+            const results = await searchMessages(term, searchFilters);
             setSearchResults(results);
         } catch (error) {
             console.log("Search error:", error);
             setSearchResults([]);
+        }
+    }
+
+    // Change one filter without disturbing the others
+    function updateSearchFilter(fieldName: keyof SearchFilters, value: string) {
+        setSearchFilters((previous) => {
+            const updated = { ...previous };
+            updated[fieldName] = value;
+            return updated;
+        });
+    }
+
+    function clearSearch() {
+        setGlobalSearchTerm("");
+        setSearchResults([]);
+        setHasSearched(false);
+        setSearchFilters({
+            withUser: "",
+            from: "",
+            to: "",
+            contentType: "",
+        });
+    }
+
+    // Report a message to the admins, asking for a reason first
+    async function handleFlagMessage(
+        kind: "direct" | "group",
+        messageId: string
+    ) {
+        const reason = window.prompt(
+            "Why are you reporting this message? (optional)"
+        );
+        // prompt returns null when the user presses Cancel
+        if (reason === null) {
+            return;
+        }
+
+        try {
+            await flagMessage(kind, messageId, reason);
+            window.alert("Thanks - an admin will review this message.");
+        } catch (error) {
+            if (error instanceof Error) {
+                window.alert(error.message);
+            } else {
+                window.alert("Could not report this message");
+            }
         }
     }
 
@@ -325,18 +582,46 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
         if (!files || files.length === 0) {
             return;
         }
-        const file = files[0];
+
+        // event.target.files is a FileList, not a real array, so convert it
+        // before we can loop over it comfortably.
+        const chosenFiles = Array.from(files);
+
         setIsUploading(true);
         try {
-            const uploadResult = await uploadFile(file);
-            setPendingFileUrl(uploadResult.fileUrl);
-            setPendingFileName(uploadResult.fileName);
-            setPendingFileType(uploadResult.fileType);
+            const result = await uploadManyFiles(chosenFiles);
+
+            // Add whatever succeeded to the ones already staged
+            if (result.uploaded.length > 0) {
+                const newAttachments = result.uploaded.map((oneUpload) => ({
+                    url: oneUpload.fileUrl,
+                    name: oneUpload.fileName,
+                    type: oneUpload.fileType,
+                }));
+                setPendingFiles((previous) => [...previous, ...newAttachments]);
+            }
+
+            // Tell the user about any that didn't make it, rather than
+            // silently dropping them
+            if (result.failures.length > 0) {
+                window.alert(
+                    "These files could not be uploaded:\n\n" +
+                    result.failures.join("\n")
+                );
+            }
         } catch (error) {
-            console.log("Could not upload file:", error);
+            console.log("Could not upload files:", error);
         }
         setIsUploading(false);
+        // Clear the input so picking the SAME file again still fires a change
         event.target.value = "";
+    }
+
+    // Take one staged file back out before sending
+    function removePendingFile(indexToRemove: number) {
+        setPendingFiles((previous) =>
+            previous.filter((_, index) => index !== indexToRemove)
+        );
     }
 
     const sortedContacts = [...contacts].sort((firstContact, secondContact) => {
@@ -366,14 +651,6 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
             );
     return (
         <div className="h-screen flex flex-col bg-gradient-to-br from-purple-600 to-blue-500 text-white overflow-hidden">
-            {currentUser.isAdmin && (
-                <button
-                    onClick={onOpenAdmin}
-                    className="bg-yellow-400 text-gray-900 hover:bg-yellow-300 text-sm font-semibold px-3 py-1 rounded-lg transition"
-                >
-                    Admin
-                </button>
-            )}
             {showProfile && (
                 <ProfilePanel
                     currentUser={currentUser}
@@ -392,6 +669,43 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                     onGroupCreated={(newGroup) => {
                         setGroups((previous) => [newGroup, ...previous]);
                         setShowCreateGroup(false);
+                        socket.disconnect();
+                        socket.connect();
+                    }}
+                />
+            )}
+
+            {showGroupSettings && selectedGroup !== null && (
+                <GroupSettingsPanel
+                    groupId={selectedGroup._id}
+                    currentUser={currentUser}
+                    allContacts={contacts}
+                    onClose={() => setShowGroupSettings(false)}
+                    onGroupChanged={async () => {
+                        // Reload the group list so a new name, picture or member
+                        // count shows up straight away
+                        try {
+                            const refreshedGroups = await fetchGroups();
+                            setGroups(refreshedGroups);
+
+                            // Keep the open conversation's header in step too
+                            const stillOpen = refreshedGroups.find(
+                                (oneGroup) => oneGroup._id === selectedGroup._id
+                            );
+                            if (stillOpen) {
+                                setSelectedGroup(stillOpen);
+                            }
+                        } catch (error) {
+                            console.log("Could not refresh groups:", error);
+                        }
+                    }}
+                    onLeftGroup={() => {
+                        // We're no longer a member, so close everything about it
+                        setShowGroupSettings(false);
+                        setSelectedGroup(null);
+                        setGroupMessages([]);
+                        // Reconnect so the server stops sending us this group's
+                        // messages (socket rooms are joined on connect)
                         socket.disconnect();
                         socket.connect();
                     }}
@@ -425,6 +739,13 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                 alt={openFile.name}
                                 className="w-full max-h-[60vh] object-contain rounded-lg mb-4"
                             />
+                        ) : openFile.type === "video" ? (
+                            <video
+                                src={openFile.url}
+                                controls
+                                autoPlay
+                                className="w-full max-h-[60vh] rounded-lg mb-4 bg-black"
+                            />
                         ) : (
                             <div className="flex flex-col items-center justify-center py-10 mb-4">
                                 <span className="text-6xl mb-3">📄</span>
@@ -452,10 +773,31 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                     <span className="text-xl font-bold">Weavr</span>
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-sm">
+                    <span
+                        className={
+                            "text-sm " +
+                            (isConnected ? "text-green-200" : "text-red-200")
+                        }
+                    >
                         {isConnected ? "● Connected" : "● Offline"}
                     </span>
+
+                    <Avatar
+                        imageUrl={currentUser.profilePicture}
+                        name={currentUser.username}
+                        size="small"
+                    />
                     <span className="text-sm">Hi, {currentUser.username}</span>
+
+                    {currentUser.isAdmin && (
+                        <button
+                            onClick={onOpenAdmin}
+                            className="bg-yellow-400 text-gray-900 hover:bg-yellow-300 text-sm font-semibold px-3 py-1 rounded-lg transition"
+                        >
+                            Admin
+                        </button>
+                    )}
+
                     <button
                         onClick={() => setShowProfile(true)}
                         className="bg-white/20 hover:bg-white/30 text-sm font-semibold px-3 py-1 rounded-lg transition"
@@ -489,6 +831,104 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                             placeholder="Search all chats..."
                             className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500"
                         />
+
+                        <button
+                            onClick={() => setShowSearchFilters(!showSearchFilters)}
+                            className="mt-2 text-xs text-purple-600 hover:underline"
+                        >
+                            {showSearchFilters ? "Hide filters" : "Filters"}
+                            {hasAnyFilter() && !showSearchFilters ? " (on)" : ""}
+                        </button>
+
+                        {showSearchFilters && (
+                            <div className="mt-2 space-y-2">
+                                {/* Filter by who the conversation is with */}
+                                <div>
+                                    <label className="block text-xs text-gray-500 mb-0.5">
+                                        With
+                                    </label>
+                                    <select
+                                        value={searchFilters.withUser}
+                                        onChange={(e) =>
+                                            updateSearchFilter("withUser", e.target.value)
+                                        }
+                                        className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-purple-500"
+                                    >
+                                        <option value="">Anyone</option>
+                                        {contacts.map((oneContact) => (
+                                            <option key={oneContact._id} value={oneContact._id}>
+                                                {oneContact.username}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Filter by the kind of content */}
+                                <div>
+                                    <label className="block text-xs text-gray-500 mb-0.5">
+                                        Type
+                                    </label>
+                                    <select
+                                        value={searchFilters.contentType}
+                                        onChange={(e) =>
+                                            updateSearchFilter("contentType", e.target.value)
+                                        }
+                                        className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-purple-500"
+                                    >
+                                        <option value="">Anything</option>
+                                        <option value="text">Text only</option>
+                                        <option value="image">Images</option>
+                                        <option value="video">Videos</option>
+                                        <option value="file">Documents</option>
+                                    </select>
+                                </div>
+
+                                {/* Filter by date range */}
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <label className="block text-xs text-gray-500 mb-0.5">
+                                            From
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={searchFilters.from}
+                                            onChange={(e) =>
+                                                updateSearchFilter("from", e.target.value)
+                                            }
+                                            className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-purple-500"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="block text-xs text-gray-500 mb-0.5">
+                                            To
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={searchFilters.to}
+                                            onChange={(e) =>
+                                                updateSearchFilter("to", e.target.value)
+                                            }
+                                            className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-purple-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleGlobalSearch}
+                                        className="flex-1 bg-purple-600 text-white text-sm font-semibold px-3 py-1.5 rounded-lg hover:bg-purple-700 transition"
+                                    >
+                                        Search
+                                    </button>
+                                    <button
+                                        onClick={clearSearch}
+                                        className="flex-1 bg-gray-200 text-gray-700 text-sm font-semibold px-3 py-1.5 rounded-lg hover:bg-gray-300 transition"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {hasSearched ? (
@@ -498,11 +938,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                     {searchResults.length} result(s)
                                 </span>
                                 <button
-                                    onClick={() => {
-                                        setGlobalSearchTerm("");
-                                        setSearchResults([]);
-                                        setHasSearched(false);
-                                    }}
+                                    onClick={clearSearch}
                                     className="text-xs text-purple-600 hover:underline"
                                 >
                                     Back to contacts
@@ -566,11 +1002,11 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                 onClick={() => handleSelectGroup(oneGroup)}
                                                 className="w-full text-left px-4 py-3 hover:bg-purple-50 transition flex items-center gap-2"
                                             >
-                                                <span className="w-6 h-6 rounded-full bg-purple-200 text-purple-700 text-xs font-bold flex items-center justify-center">
-                                                    {oneGroup.name
-                                                        ? oneGroup.name.charAt(0).toUpperCase()
-                                                        : "?"}
-                                                </span>
+                                                <Avatar
+                                                    imageUrl={oneGroup.groupPicture}
+                                                    name={oneGroup.name || "?"}
+                                                    size="small"
+                                                />
                                                 <span
                                                     className={
                                                         "flex-1 " + (unreadCount > 0 ? "font-bold" : "")
@@ -610,14 +1046,24 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                     (isSelected ? "bg-purple-100 font-semibold" : "")
                                                 }
                                             >
-                                                <span
-                                                    className={
-                                                        "w-2.5 h-2.5 rounded-full " +
-                                                        (statusMap[contact._id] === "online"
-                                                            ? "bg-green-500"
-                                                            : "bg-gray-300")
-                                                    }
-                                                ></span>
+                                                {/* Avatar with the status dot sitting on its corner */}
+                                                <span className="relative shrink-0">
+                                                    <Avatar
+                                                        imageUrl={contact.profilePicture}
+                                                        name={contact.username}
+                                                        size="small"
+                                                    />
+                                                    <span
+                                                        className={
+                                                            "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white " +
+                                                            (statusMap[contact._id] === "online"
+                                                                ? "bg-green-500"
+                                                                : statusMap[contact._id] === "away"
+                                                                    ? "bg-yellow-400"
+                                                                    : "bg-gray-300")
+                                                        }
+                                                    ></span>
+                                                </span>
                                                 <span
                                                     className={
                                                         "flex-1 " +
@@ -654,13 +1100,26 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                         <>
                             {/* Group header: info left, search right */}
                             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-4">
-                                <div>
-                                    <div className="font-semibold text-purple-700">
-                                        {selectedGroup.name}
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <Avatar
+                                        imageUrl={selectedGroup.groupPicture}
+                                        name={selectedGroup.name}
+                                    />
+                                    <div className="min-w-0">
+                                        <div className="font-semibold text-purple-700 truncate">
+                                            {selectedGroup.name}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                            {selectedGroup.members.length} members
+                                        </div>
                                     </div>
-                                    <div className="text-xs text-gray-500">
-                                        {selectedGroup.members.length} members
-                                    </div>
+                                    <button
+                                        onClick={() => setShowGroupSettings(true)}
+                                        title="Group settings"
+                                        className="text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-1 rounded-lg hover:bg-purple-200 transition shrink-0"
+                                    >
+                                        ⚙ Settings
+                                    </button>
                                 </div>
 
                                 {/* Search within this group */}
@@ -686,6 +1145,17 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                 ) : (
                                     filteredGroupMessages.map((oneMessage) => {
                                         const isMine = oneMessage.sender === currentUser.id;
+                                        const isHidden = oneMessage.isHidden === true;
+
+                                        // In a group you need to know WHO said it.
+                                        // Look the sender up in the contact list.
+                                        const senderContact = contacts.find(
+                                            (oneContact) => oneContact._id === oneMessage.sender
+                                        );
+                                        const senderName = senderContact
+                                            ? senderContact.username
+                                            : "Someone";
+
                                         return (
                                             <div
                                                 key={oneMessage._id}
@@ -696,14 +1166,69 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                         : "bg-purple-100 text-purple-900")
                                                 }
                                             >
-                                                {oneMessage.text}
+                                                {/* Only label other people's messages -
+                                                    my own are already on the right. */}
+                                                {!isMine && (
+                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                        <Avatar
+                                                            imageUrl={senderContact?.profilePicture}
+                                                            name={senderName}
+                                                            size="small"
+                                                        />
+                                                        <span className="text-xs font-semibold text-purple-700">
+                                                            {senderName}
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                <MessageContent
+                                                    text={oneMessage.text}
+                                                    fileUrl={oneMessage.fileUrl}
+                                                    fileName={oneMessage.fileName}
+                                                    fileType={oneMessage.fileType}
+                                                    isHidden={isHidden}
+                                                    onOpenFile={setOpenFile}
+                                                />
+
+                                                {!isMine && !isHidden && (
+                                                    <button
+                                                        onClick={() =>
+                                                            handleFlagMessage("group", oneMessage._id)
+                                                        }
+                                                        title="Report this message"
+                                                        className="block mt-1 text-[10px] opacity-50 hover:opacity-100 hover:underline"
+                                                    >
+                                                        Report
+                                                    </button>
+                                                )}
                                             </div>
                                         );
                                     })
                                 )}
                             </div>
 
-                            <div className="border-t border-gray-200 p-3 flex gap-2">
+                            <PendingFilesStrip
+                                files={pendingFiles}
+                                onRemove={removePendingFile}
+                            />
+
+                            <div className="border-t border-gray-200 p-3 flex gap-2 items-center">
+                                <input
+                                    type="file"
+                                    accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                                    id="groupFileUpload"
+                                    multiple
+                                    onChange={handleFileSelected}
+                                    className="hidden"
+                                />
+                                <label
+                                    htmlFor="groupFileUpload"
+                                    className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-lg transition"
+                                    title="Send a file"
+                                >
+                                    📎
+                                </label>
+
                                 <input
                                     type="text"
                                     value={groupMessageText}
@@ -713,7 +1238,14 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                             handleSendGroupMessage();
                                         }
                                     }}
-                                    placeholder={"Message " + selectedGroup.name + "..."}
+                                    placeholder={
+                                        isUploading
+                                            ? "Uploading files..."
+                                            : pendingFiles.length > 0
+                                                ? "Add a caption (optional) and hit Send"
+                                                : "Message " + selectedGroup.name + "..."
+                                    }
+                                    disabled={isUploading}
                                     className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
                                 />
                                 <button
@@ -727,16 +1259,22 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                     ) : selectedContact !== null ? (
                         <>
                             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-4">
-                                <div>
-                                    <div className="font-semibold text-purple-700">
-                                        {selectedContact.username}
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <Avatar
+                                        imageUrl={selectedContact.profilePicture}
+                                        name={selectedContact.username}
+                                    />
+                                    <div className="min-w-0">
+                                        <div className="font-semibold text-purple-700 truncate">
+                                            {selectedContact.username}
+                                        </div>
+                                        {selectedContact.statusMessage &&
+                                            selectedContact.statusMessage.trim() !== "" && (
+                                                <div className="text-xs text-gray-500 truncate">
+                                                    {selectedContact.statusMessage}
+                                                </div>
+                                            )}
                                     </div>
-                                    {selectedContact.statusMessage &&
-                                        selectedContact.statusMessage.trim() !== "" && (
-                                            <div className="text-xs text-gray-500">
-                                                {selectedContact.statusMessage}
-                                            </div>
-                                        )}
                                 </div>
 
                                 <input
@@ -760,10 +1298,9 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                 ) : (
                                     filteredMessages.map((singleMessage) => {
                                         const isMine = singleMessage.sender === currentUser.id;
-                                        const isImage = singleMessage.fileType === "image";
-                                        const isFile =
-                                            singleMessage.fileType === "file" &&
-                                            singleMessage.fileUrl !== "";
+                                        // An admin removed this one. The server already
+                                        // stripped the content, so only a note remains.
+                                        const isHidden = singleMessage.isHidden === true;
                                         return (
                                             <div
                                                 key={singleMessage._id}
@@ -774,37 +1311,30 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                                         : "bg-purple-100 text-purple-900")
                                                 }
                                             >
-                                                {isImage ? (
-                                                    <img
-                                                        src={singleMessage.fileUrl}
-                                                        alt={singleMessage.fileName || "image"}
+                                                <MessageContent
+                                                    text={singleMessage.text}
+                                                    fileUrl={singleMessage.fileUrl}
+                                                    fileName={singleMessage.fileName}
+                                                    fileType={singleMessage.fileType}
+                                                    isHidden={isHidden}
+                                                    onOpenFile={setOpenFile}
+                                                />
+
+                                                {/* You can report someone else's message
+                                                    to the admins, but not your own. */}
+                                                {!isMine && !isHidden && (
+                                                    <button
                                                         onClick={() =>
-                                                            setOpenFile({
-                                                                url: singleMessage.fileUrl || "",
-                                                                name: singleMessage.fileName || "image",
-                                                                type: "image",
-                                                            })
+                                                            handleFlagMessage(
+                                                                "direct",
+                                                                singleMessage._id
+                                                            )
                                                         }
-                                                        className="rounded-lg max-w-full max-h-64 cursor-pointer"
-                                                    />
-                                                ) : isFile ? (
-                                                    <div
-                                                        onClick={() =>
-                                                            setOpenFile({
-                                                                url: singleMessage.fileUrl || "",
-                                                                name: singleMessage.fileName || "File",
-                                                                type: "file",
-                                                            })
-                                                        }
-                                                        className="flex items-center gap-2 cursor-pointer"
+                                                        title="Report this message"
+                                                        className="block mt-1 text-[10px] opacity-50 hover:opacity-100 hover:underline"
                                                     >
-                                                        <span className="text-2xl">📄</span>
-                                                        <span className="text-sm underline">
-                                                            {singleMessage.fileName || "File"}
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    singleMessage.text
+                                                        Report
+                                                    </button>
                                                 )}
                                             </div>
                                         );
@@ -812,40 +1342,17 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                 )}
                             </div>
 
-                            {pendingFileUrl !== "" && (
-                                <div className="border-t border-gray-200 px-3 pt-3 flex items-center gap-3">
-                                    {pendingFileType === "image" ? (
-                                        <img
-                                            src={pendingFileUrl}
-                                            alt="preview"
-                                            className="w-16 h-16 object-cover rounded-lg border border-gray-200"
-                                        />
-                                    ) : (
-                                        <div className="w-16 h-16 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-2xl">
-                                            📄
-                                        </div>
-                                    )}
-                                    <span className="text-sm text-gray-600 flex-1 truncate">
-                                        {pendingFileName}
-                                    </span>
-                                    <button
-                                        onClick={() => {
-                                            setPendingFileUrl("");
-                                            setPendingFileName("");
-                                            setPendingFileType("");
-                                        }}
-                                        className="text-red-500 text-sm hover:underline"
-                                    >
-                                        Remove
-                                    </button>
-                                </div>
-                            )}
+                            <PendingFilesStrip
+                                files={pendingFiles}
+                                onRemove={removePendingFile}
+                            />
 
                             <div className="border-t border-gray-200 p-3 flex gap-2 items-center">
                                 <input
                                     type="file"
-                                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                                    accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
                                     id="imageUpload"
+                                    multiple
                                     onChange={handleFileSelected}
                                     className="hidden"
                                 />
@@ -868,8 +1375,8 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                                     }}
                                     placeholder={
                                         isUploading
-                                            ? "Uploading file..."
-                                            : pendingFileUrl !== ""
+                                            ? "Uploading files..."
+                                            : pendingFiles.length > 0
                                                 ? "Add a caption (optional) and hit Send"
                                                 : "Message " + selectedContact.username + "..."
                                     }

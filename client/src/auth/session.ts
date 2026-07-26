@@ -10,7 +10,10 @@ export type StoredUser = {
   username: string;
   email: string;
   statusMessage?: string;
-  isAdmin?: boolean;   // <-- add this
+  isAdmin?: boolean;
+  // Cloudinary URL of the user's picture. Empty/missing means "no picture",
+  // and the UI falls back to the first letter of their username.
+  profilePicture?: string;
 };
 // Save token + user after a successful login
 export function saveSession(token: string, user: StoredUser) {

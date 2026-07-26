@@ -31,16 +31,26 @@ router.put("/profile", requireAuth, async (req, res) => {
     // Read the fields the user wants to change
     const newUsername = req.body.username;
     const newStatusMessage = req.body.statusMessage;
+    // The Cloudinary URL of an already-uploaded picture. The client uploads
+    // the image to /api/upload first, then sends the URL here.
+    const newProfilePicture = req.body.profilePicture;
 
     // Build an object with only the fields that were actually provided,
     // so a user can update just one thing without wiping the other.
-    const fieldsToUpdate: { username?: string; statusMessage?: string } = {};
+    const fieldsToUpdate: {
+      username?: string;
+      statusMessage?: string;
+      profilePicture?: string;
+    } = {};
 
     if (newUsername !== undefined) {
       fieldsToUpdate.username = newUsername;
     }
     if (newStatusMessage !== undefined) {
       fieldsToUpdate.statusMessage = newStatusMessage;
+    }
+    if (newProfilePicture !== undefined) {
+      fieldsToUpdate.profilePicture = newProfilePicture;
     }
 
     // Update the user and get the UPDATED document back.

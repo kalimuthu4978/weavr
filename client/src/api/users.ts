@@ -7,7 +7,8 @@ export type ContactUser = {
   username: string;
   email: string;
   status: string;
-  statusMessage?: string;   // <-- add this (optional; may be empty)
+  statusMessage?: string;   // optional; may be empty
+  profilePicture?: string;  // Cloudinary URL; empty means "no picture"
 };
 
 // Fetch every other user (the backend excludes the logged-in one)
@@ -34,10 +35,13 @@ export async function fetchUsers(): Promise<ContactUser[]> {
 
 // (fetchUsers stays above)
 
-// Update the logged-in user's own profile (username and/or status message)
+// Update the logged-in user's own profile.
+// profilePicture is the Cloudinary URL returned by uploadFile(), or "" to
+// remove the current picture.
 export async function updateProfile(
   username: string,
-  statusMessage: string
+  statusMessage: string,
+  profilePicture: string
 ) {
   const token = getToken();
 
@@ -50,6 +54,7 @@ export async function updateProfile(
     body: JSON.stringify({
       username: username,
       statusMessage: statusMessage,
+      profilePicture: profilePicture,
     }),
   });
 

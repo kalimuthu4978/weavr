@@ -43,3 +43,24 @@ export function registerDisconnect(io: Server, socket: Socket, userId: string) {
     }
   });
 }
+
+
+// Lets a client set its own status (e.g. "away" when idle, "online" when active)
+export function registerStatusChange(io: Server, socket: Socket, userId: string) {
+  socket.on("setStatus", async (newStatus: string) => {
+    console.log("setStatus received:", newStatus, "from user:", userId);
+    const allowed = ["online", "away", "offline"];
+    if (!allowed.includes(newStatus)) {
+      return;
+    }
+    if (!userId) {
+      return;
+    }
+    try {
+      await User.findByIdAndUpdate(userId, { status: newStatus });
+      io.emit("userStatusChanged", { userId: userId, status: newStatus });
+    } catch (error) {
+      console.log("Error updating status:", error);
+    }
+  });
+}
