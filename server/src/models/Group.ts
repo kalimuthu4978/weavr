@@ -36,6 +36,13 @@ const groupSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // A public group is listed in "Discover groups" so anyone can find and
+    // join it themselves. A private one is invite-only: you're only in it if
+    // a group admin adds you.
+    isPublic: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

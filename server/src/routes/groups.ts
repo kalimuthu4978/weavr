@@ -144,6 +144,73 @@ router.get("/:groupId/messages", requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/groups/discover  ->  public groups the user is NOT already in,
+// so they can find and join one themselves.
+//
+// This is declared BEFORE /:groupId, otherwise Express would treat the word
+// "discover" as a group id and try to look it up.
+router.get("/discover", requireAuth, async (req, res) => {
+  try {
+    const currentUserId = (req as any).userId;
+
+    // Public groups where my id is NOT in the members array
+    const openGroups = await Group.find({
+      isPublic: true,
+      members: { $ne: currentUserId },
+    }).sort({ createdAt: -1 });
+
+    // Only send what the browse list needs
+    const summaries = openGroups.map((oneGroup: any) => ({
+      _id: oneGroup._id,
+      name: oneGroup.name,
+      groupPicture: oneGroup.groupPicture,
+      memberCount: oneGroup.members.length,
+    }));
+
+    res.status(200).json(summaries);
+  } catch (error) {
+    console.log("Error loading public groups:", error);
+    res.status(500).json({ message: "Something went wrong on the server" });
+  }
+});
+
+// POST /api/groups/:groupId/join  ->  join a public group yourself
+router.post("/:groupId/join", requireAuth, async (req, res) => {
+  try {
+    const currentUserId = (req as any).userId;
+    const groupId = String(req.params.groupId);
+
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    // Private groups are invite-only - a group admin has to add you
+    if (!group.isPublic) {
+      return res
+        .status(403)
+        .json({ message: "This group is private, so you need an invite" });
+    }
+
+    if (isMemberOfGroup(group, currentUserId)) {
+      return res
+        .status(400)
+        .json({ message: "You are already in this group" });
+    }
+
+    group.members.push(currentUserId);
+    await group.save();
+
+    res.status(200).json({
+      message: "Joined the group",
+      group: group,
+    });
+  } catch (error) {
+    console.log("Error joining group:", error);
+    res.status(500).json({ message: "Something went wrong on the server" });
+  }
+});
+
 // GET /api/groups/:groupId  ->  one group, with its members' details filled in.
 // Used by the group settings panel so it can show names and pictures.
 router.get("/:groupId", requireAuth, async (req, res) => {
@@ -194,6 +261,7 @@ router.put("/:groupId", requireAuth, async (req, res) => {
     // Only change the fields that were actually sent
     const newName = req.body.name;
     const newGroupPicture = req.body.groupPicture;
+    const newIsPublic = req.body.isPublic;
 
     if (newName !== undefined) {
       if (newName.trim() === "") {
@@ -203,6 +271,9 @@ router.put("/:groupId", requireAuth, async (req, res) => {
     }
     if (newGroupPicture !== undefined) {
       group.groupPicture = newGroupPicture;
+    }
+    if (typeof newIsPublic === "boolean") {
+      group.isPublic = newIsPublic;
     }
 
     await group.save();

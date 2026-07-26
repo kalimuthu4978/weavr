@@ -11,6 +11,8 @@ export type Group = {
   // field existed may not have it, so it's optional.
   groupAdmins?: string[];
   groupPicture?: string;
+  // Public groups can be found and joined by anyone
+  isPublic?: boolean;
 };
 
 // The same group, but from GET /api/groups/:groupId where the member ids
@@ -28,6 +30,7 @@ export type GroupWithMembers = {
   createdBy: string;
   groupAdmins?: string[];
   groupPicture?: string;
+  isPublic?: boolean;
 };
 
 // Fetch all groups the logged-in user belongs to
@@ -137,16 +140,38 @@ export async function fetchGroupDetails(
   return await sendGroupRequest(`/${groupId}`, "GET");
 }
 
-// Rename a group and/or change its picture
+// Rename a group, change its picture, and/or set whether it's public.
+// isPublic is optional - leave it out to keep the current setting.
 export async function updateGroup(
   groupId: string,
   name: string,
-  groupPicture: string
+  groupPicture: string,
+  isPublic?: boolean
 ): Promise<Group> {
   const data = await sendGroupRequest(`/${groupId}`, "PUT", {
     name: name,
     groupPicture: groupPicture,
+    isPublic: isPublic,
   });
+  return data.group;
+}
+
+// A public group shown in the browse list
+export type DiscoverableGroup = {
+  _id: string;
+  name: string;
+  groupPicture?: string;
+  memberCount: number;
+};
+
+// Public groups the logged-in user isn't in yet
+export async function fetchDiscoverableGroups(): Promise<DiscoverableGroup[]> {
+  return await sendGroupRequest("/discover", "GET");
+}
+
+// Join a public group yourself
+export async function joinGroup(groupId: string): Promise<Group> {
+  const data = await sendGroupRequest(`/${groupId}/join`, "POST");
   return data.group;
 }
 

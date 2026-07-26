@@ -14,6 +14,7 @@ import PendingFilesStrip from "./PendingFilesStrip";
 import MessageContent from "./MessageContent";
 import MentionPicker from "./MentionPicker";
 import UserProfilePanel from "./UserProfilePanel";
+import DiscoverGroupsPanel from "./DiscoverGroupsPanel";
 import { getMentionBeingTyped, completeMention } from "../utils/mentions";
 import Avatar from "./Avatar";
 import { uploadManyFiles } from "../api/upload";
@@ -92,6 +93,7 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
     const [groupMessageText, setGroupMessageText] = useState("");
     const [statusMap, setStatusMap] = useState<Record<string, string>>({});
     const [showCreateGroup, setShowCreateGroup] = useState(false);
+    const [showDiscoverGroups, setShowDiscoverGroups] = useState(false);
     const [unreadIds, setUnreadIds] = useState<Record<string, string[]>>({});
     // Unread group message IDs per group id, e.g. { "6a4b5d...": ["msgId1"] }
     const [groupUnreadIds, setGroupUnreadIds] = useState<Record<string, string[]>>({});
@@ -716,6 +718,25 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                 />
             )}
 
+            {showDiscoverGroups && (
+                <DiscoverGroupsPanel
+                    onClose={() => setShowDiscoverGroups(false)}
+                    onJoined={async () => {
+                        // Refresh the sidebar so the new group appears
+                        try {
+                            const refreshedGroups = await fetchGroups();
+                            setGroups(refreshedGroups);
+                        } catch (error) {
+                            console.log("Could not refresh groups:", error);
+                        }
+                        // Reconnect so the server puts us in the group's room
+                        // and its messages start arriving
+                        socket.disconnect();
+                        socket.connect();
+                    }}
+                />
+            )}
+
             {profileUserId !== null && (
                 <UserProfilePanel
                     userId={profileUserId}
@@ -1027,12 +1048,21 @@ function ChatScreen({ currentUser, onLogout, onProfileUpdated, onOpenAdmin }: Ch
                         <>
                             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                                 <span className="font-semibold text-purple-700">Groups</span>
-                                <button
-                                    onClick={() => setShowCreateGroup(true)}
-                                    className="text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-1 rounded-lg hover:bg-purple-200 transition"
-                                >
-                                    + New
-                                </button>
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={() => setShowDiscoverGroups(true)}
+                                        title="Find public groups to join"
+                                        className="text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-1 rounded-lg hover:bg-purple-200 transition"
+                                    >
+                                        Discover
+                                    </button>
+                                    <button
+                                        onClick={() => setShowCreateGroup(true)}
+                                        className="text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-1 rounded-lg hover:bg-purple-200 transition"
+                                    >
+                                        + New
+                                    </button>
+                                </div>
                             </div>
                             <div className="border-b border-gray-200">
                                 {groups.length === 0 ? (

@@ -256,6 +256,40 @@ function GroupSettingsPanel({
               )}
             </div>
 
+            {/* --- Who can join --- */}
+            {canManage && (
+              <div className="mb-6">
+                <label className="block text-sm font-semibold mb-1">
+                  Who can join
+                </label>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={group.isPublic === true}
+                    onChange={(e) =>
+                      runAction(
+                        () =>
+                          updateGroup(
+                            groupId,
+                            groupName,
+                            groupPicture,
+                            e.target.checked
+                          ),
+                        e.target.checked
+                          ? "Anyone can now find and join this group"
+                          : "This group is now invite-only"
+                      )
+                    }
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm text-gray-600">
+                    Public - list this group under "Discover groups" so anyone
+                    can join it. Leave unticked to keep it invite-only.
+                  </span>
+                </label>
+              </div>
+            )}
+
             {/* --- Current members --- */}
             <h3 className="font-semibold text-purple-700 mb-2">
               Members ({group.members.length})
